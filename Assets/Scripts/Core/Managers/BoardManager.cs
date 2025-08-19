@@ -311,6 +311,26 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
+        /// 检查指定位置是否被占用
+        /// </summary>
+        /// <param name="_position">要检查的位置</param>
+        /// <returns>位置是否被占用</returns>
+        public bool isPositionOccupied(Vector2Int _position)
+        {
+            return getPositionOwner(_position) != 0;
+        }
+        
+        /// <summary>
+        /// 获取指定位置的玩家ID
+        /// </summary>
+        /// <param name="_position">要检查的位置</param>
+        /// <returns>占用该位置的玩家ID，0表示空位</returns>
+        public int getPlayerAtPosition(Vector2Int _position)
+        {
+            return getPositionOwner(_position);
+        }
+        
+        /// <summary>
         /// 获取棋盘系统的直接引用（用于高级操作）
         /// </summary>
         /// <returns>棋盘系统实例</returns>

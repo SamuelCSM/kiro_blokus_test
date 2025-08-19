@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 using BlokusGame.Core.Interfaces;
 using BlokusGame.Core.Data;
 
@@ -68,25 +69,28 @@ namespace BlokusGame.Core.Events
         /// 游戏开始事件
         /// </summary>
         /// <param name="_playerCount">玩家数量</param>
-        /// <param name="_gameMode">游戏模式</param>
-        public System.Action<int, GameMode> onGameStarted;
+        public static System.Action<int> onGameStarted;
         
         /// <summary>
         /// 游戏结束事件
         /// </summary>
-        /// <param name="_winnerId">获胜玩家ID</param>
-        /// <param name="_finalScores">所有玩家的最终分数</param>
-        public System.Action<int, int[]> onGameEnded;
+        /// <param name="_finalScores">所有玩家的最终分数字典</param>
+        public static System.Action<Dictionary<int, int>> onGameEnded;
+        
+        /// <summary>
+        /// 游戏重置事件
+        /// </summary>
+        public static System.Action onGameReset;
         
         /// <summary>
         /// 游戏暂停事件
         /// </summary>
-        public System.Action onGamePaused;
+        public static System.Action onGamePaused;
         
         /// <summary>
         /// 游戏恢复事件
         /// </summary>
-        public System.Action onGameResumed;
+        public static System.Action onGameResumed;
         
         // 回合管理事件
         
@@ -94,20 +98,28 @@ namespace BlokusGame.Core.Events
         /// 回合开始事件
         /// </summary>
         /// <param name="_playerId">当前回合玩家ID</param>
-        public System.Action<int> onTurnStarted;
+        /// <param name="_turnNumber">回合数</param>
+        public static System.Action<int, int> onTurnStarted;
         
         /// <summary>
         /// 回合结束事件
         /// </summary>
         /// <param name="_playerId">结束回合的玩家ID</param>
-        public System.Action<int> onTurnEnded;
+        /// <param name="_turnNumber">回合数</param>
+        public static System.Action<int, int> onTurnEnded;
         
         /// <summary>
         /// 玩家跳过回合事件
         /// </summary>
         /// <param name="_playerId">跳过回合的玩家ID</param>
-        /// <param name="_reason">跳过原因</param>
-        public System.Action<int, string> onTurnSkipped;
+        public static System.Action<int> onPlayerSkipped;
+        
+        /// <summary>
+        /// 玩家状态变更事件
+        /// </summary>
+        /// <param name="_playerId">玩家ID</param>
+        /// <param name="_newState">新状态</param>
+        public static System.Action<int, PlayerGameState> onPlayerStateChanged;
         
         // 方块操作事件
         
@@ -299,7 +311,7 @@ namespace BlokusGame.Core.Events
                 // 清理回合管理事件
                 onTurnStarted = null;
                 onTurnEnded = null;
-                onTurnSkipped = null;
+				onPlayerSkipped = null;
                 
                 // 清理方块操作事件
                 onPieceSelected = null;

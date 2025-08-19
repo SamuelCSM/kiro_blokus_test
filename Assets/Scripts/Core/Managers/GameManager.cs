@@ -11,7 +11,7 @@ namespace BlokusGame.Core.Managers
     /// 负责游戏状态管理、回合控制、游戏流程协调
     /// 这是整个游戏系统的中央控制点
     /// </summary>
-    public class GameManager : MonoBehaviour
+    public class GameManager : MonoBehaviour, _IGameStateManager
     {
         [Header("游戏配置")]
         /// <summary>最大玩家数量</summary>
@@ -27,6 +27,9 @@ namespace BlokusGame.Core.Managers
         [SerializeField] private float _m_autoSaveInterval = 30f;
         
         [Header("组件引用")]
+        /// <summary>游戏状态管理器引用</summary>
+        [SerializeField] private GameStateManager _m_gameStateManager;
+        
         /// <summary>棋盘管理器引用</summary>
         [SerializeField] private BoardManager _m_boardManager;
         
@@ -49,6 +52,9 @@ namespace BlokusGame.Core.Managers
         /// <summary>当前回合玩家ID</summary>
         private int _m_currentPlayerId = 1;
         
+        /// <summary>当前游戏回合数</summary>
+        private int _m_turnNumber = 1;
+        
         /// <summary>游戏开始时间</summary>
         private float _m_gameStartTime;
         
@@ -65,11 +71,17 @@ namespace BlokusGame.Core.Managers
         /// <summary>当前游戏状态</summary>
         public GameState currentGameState => _m_currentGameState;
         
+        /// <summary>当前游戏状态（接口实现）</summary>
+        public GameState currentState => _m_currentGameState;
+        
         /// <summary>当前游戏模式</summary>
         public GameMode currentGameMode => _m_currentGameMode;
         
         /// <summary>当前回合玩家ID</summary>
         public int currentPlayerId => _m_currentPlayerId;
+        
+        /// <summary>当前游戏回合数</summary>
+        public int turnNumber => _m_turnNumber;
         
         /// <summary>游戏是否正在进行中</summary>
         public bool isGameActive => _m_currentGameState == GameState.GamePlaying;
@@ -139,6 +151,15 @@ namespace BlokusGame.Core.Managers
         #region 公共方法
         
         /// <summary>
+        /// 开始新游戏（接口实现）
+        /// </summary>
+        /// <param name="_playerCount">玩家数量</param>
+        public void startNewGame(int _playerCount)
+        {
+            startNewGame(_playerCount, GameMode.LocalMultiplayer);
+        }
+        
+        /// <summary>
         /// 开始新游戏
         /// </summary>
         /// <param name="_playerCount">玩家数量</param>
@@ -159,18 +180,32 @@ namespace BlokusGame.Core.Managers
             _m_currentGameMode = _gameMode;
             _m_gameStartTime = Time.time;
             _m_lastAutoSaveTime = Time.time;
-            _m_currentPlayerId = 1;
             
             // 初始化游戏组件
             _m_boardManager?.initializeBoard();
             _m_playerManager?.initializePlayers(_playerCount, _gameMode);
             
-            // 设置游戏状态
-            _setGameState(GameState.GamePlaying);
-            
-            // 触发游戏开始事件
-            GameEvents.instance.onGameStarted?.Invoke(_playerCount, _gameMode);
-            GameEvents.instance.onTurnStarted?.Invoke(_m_currentPlayerId);
+            // 委托给GameStateManager处理游戏状态和回合管理
+            if (_m_gameStateManager != null)
+            {
+                _m_gameStateManager.startNewGame(_playerCount);
+            }
+            else
+            {
+                // 备用方案：直接管理状态
+                _m_currentPlayerId = 1;
+                _setGameState(GameState.GamePlaying);
+                GameEvents.onGameStarted?.Invoke(_playerCount);
+                GameEvents.onTurnStarted?.Invoke(_m_currentPlayerId, _m_turnNumber);
+            }
+        }
+        
+        /// <summary>
+        /// 切换到下一个玩家的回合（接口实现）
+        /// </summary>
+        public void nextTurn()
+        {
+            endCurrentTurn();
         }
         
         /// <summary>
@@ -184,23 +219,27 @@ namespace BlokusGame.Core.Managers
                 return;
             }
             
-            Debug.Log($"[GameManager] 结束玩家 {_m_currentPlayerId} 的回合");
+            Debug.Log($"[GameManager] 结束玩家 {currentPlayerId} 的回合");
             
-            // 触发回合结束事件
-            GameEvents.instance.onTurnEnded?.Invoke(_m_currentPlayerId);
-            
-            // 检查游戏是否结束
-            if (_checkGameEndCondition())
+            // 委托给GameStateManager处理回合切换
+            if (_m_gameStateManager != null)
             {
-                _endGame();
-                return;
+                _m_gameStateManager.nextTurn();
             }
-            
-            // 切换到下一个玩家
-            _nextPlayer();
-            
-            // 触发新回合开始事件
-            GameEvents.instance.onTurnStarted?.Invoke(_m_currentPlayerId);
+            else
+            {
+                // 备用方案：直接管理回合
+                GameEvents.onTurnEnded?.Invoke(_m_currentPlayerId, _m_turnNumber);
+                
+                if (_checkGameEndCondition())
+                {
+                    _endGame();
+                    return;
+                }
+                
+                _nextPlayer();
+                GameEvents.onTurnStarted?.Invoke(_m_currentPlayerId, _m_turnNumber);
+            }
         }
         
         /// <summary>
@@ -214,10 +253,18 @@ namespace BlokusGame.Core.Managers
                 return;
             }
             
-            _setGameState(GameState.GamePaused);
-            
-            Debug.Log("[GameManager] 游戏已暂停");
-            GameEvents.instance.onGamePaused?.Invoke();
+            // 委托给GameStateManager处理暂停
+            if (_m_gameStateManager != null)
+            {
+                _m_gameStateManager.pauseGame();
+            }
+            else
+            {
+                // 备用方案：直接管理状态
+                _setGameState(GameState.GamePaused);
+                Debug.Log("[GameManager] 游戏已暂停");
+                GameEvents.onGamePaused?.Invoke();
+            }
         }
         
         /// <summary>
@@ -225,16 +272,24 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         public void resumeGame()
         {
-            if (_m_currentGameState != GameState.GamePaused)
+            if (currentGameState != GameState.GamePaused)
             {
                 Debug.LogWarning("[GameManager] 游戏未暂停，无法恢复");
                 return;
             }
             
-            _setGameState(GameState.GamePlaying);
-            
-            Debug.Log("[GameManager] 游戏已恢复");
-            GameEvents.instance.onGameResumed?.Invoke();
+            // 委托给GameStateManager处理恢复
+            if (_m_gameStateManager != null)
+            {
+                _m_gameStateManager.resumeGame();
+            }
+            else
+            {
+                // 备用方案：直接管理状态
+                _setGameState(GameState.GamePlaying);
+                Debug.Log("[GameManager] 游戏已恢复");
+                GameEvents.onGameResumed?.Invoke();
+            }
         }
         
         /// <summary>
@@ -292,6 +347,143 @@ namespace BlokusGame.Core.Managers
             _setGameState(GameState.MainMenu);
         }
         
+        /// <summary>
+        /// 跳过当前玩家的回合
+        /// 当玩家无法放置任何方块时调用
+        /// </summary>
+        public void skipCurrentPlayer()
+        {
+            if (!isGameActive)
+            {
+                Debug.LogWarning("[GameManager] 游戏未进行中，无法跳过回合");
+                return;
+            }
+            
+            Debug.Log($"[GameManager] 玩家 {_m_currentPlayerId} 跳过回合");
+            
+            // 触发玩家跳过事件
+            GameEvents.onPlayerSkipped?.Invoke(_m_currentPlayerId);
+            
+            // 切换到下一回合
+            endCurrentTurn();
+        }
+        
+        /// <summary>
+        /// 获取游戏进度百分比
+        /// 基于已放置方块数量计算游戏进度
+        /// </summary>
+        /// <returns>游戏进度 (0.0 - 1.0)</returns>
+        public float getGameProgress()
+        {
+            if (_m_playerManager == null)
+                return 0f;
+            
+            int totalPieces = 0;
+            int placedPieces = 0;
+            int playerCount = _m_playerManager.getPlayerCount();
+            
+            for (int i = 1; i <= playerCount; i++)
+            {
+                var player = _m_playerManager.getPlayer(i);
+                if (player != null)
+                {
+                    // TODO: 实现获取玩家方块数量的方法
+                    // totalPieces += player.getTotalPieceCount();
+                    // placedPieces += player.getPlacedPieceCount();
+                }
+            }
+            
+            return totalPieces > 0 ? (float)placedPieces / totalPieces : 0f;
+        }
+        
+        /// <summary>
+        /// 获取玩家的游戏状态
+        /// 返回玩家是否还在游戏中、是否跳过等信息
+        /// </summary>
+        /// <param name="_playerId">玩家ID</param>
+        /// <returns>玩家游戏状态</returns>
+        public PlayerGameState getPlayerState(int _playerId)
+        {
+            if (_m_playerManager != null)
+            {
+                var player = _m_playerManager.getPlayer(_playerId);
+                if (player != null)
+                {
+                    // TODO: 实现从Player获取状态的方法
+                    // return player.getGameState();
+                }
+            }
+            
+            return PlayerGameState.Active; // 默认状态
+        }
+        
+        /// <summary>
+        /// 设置玩家的游戏状态
+        /// 更新玩家的参与状态（活跃、跳过、退出等）
+        /// </summary>
+        /// <param name="_playerId">玩家ID</param>
+        /// <param name="_state">新的游戏状态</param>
+        public void setPlayerState(int _playerId, PlayerGameState _state)
+        {
+            if (_m_playerManager != null)
+            {
+                var player = _m_playerManager.getPlayer(_playerId);
+                if (player != null)
+                {
+                    // TODO: 实现设置Player状态的方法
+                    // player.setGameState(_state);
+                    Debug.Log($"[GameManager] 玩家 {_playerId} 状态变更为: {_state}");
+                    
+                    // 触发玩家状态变更事件
+                    GameEvents.onPlayerStateChanged?.Invoke(_playerId, _state);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 检查是否可以切换到下一回合
+        /// 验证当前玩家是否完成了回合操作
+        /// </summary>
+        /// <returns>是否可以切换回合</returns>
+        public bool canAdvanceTurn()
+        {
+            return isGameActive;
+        }
+        
+        /// <summary>
+        /// 结束游戏
+        /// 计算最终得分，触发游戏结束事件
+        /// </summary>
+        public void endGame()
+        {
+            if (currentState == GameState.GameEnded)
+            {
+                Debug.LogWarning("[GameManager] 游戏已经结束");
+                return;
+            }
+            
+            Debug.Log("[GameManager] 游戏结束");
+            _endGame();
+        }
+        
+        /// <summary>
+        /// 重置游戏
+        /// 清除所有游戏数据，返回到初始状态
+        /// </summary>
+        public void resetGame()
+        {
+            Debug.Log("[GameManager] 重置游戏");
+            
+            // 重置游戏状态
+            _resetGameState();
+            
+            // 设置为主菜单状态
+            _setGameState(GameState.MainMenu);
+            
+            // 触发游戏重置事件
+            GameEvents.onGameReset?.Invoke();
+        }
+        
         #endregion
         
         #region 私有方法
@@ -303,7 +495,21 @@ namespace BlokusGame.Core.Managers
         {
             Debug.Log("[GameManager] 初始化游戏管理器");
             
+            // 自动获取组件引用
+            if (_m_gameStateManager == null)
+                _m_gameStateManager = FindObjectOfType<GameStateManager>();
+            if (_m_boardManager == null)
+                _m_boardManager = FindObjectOfType<BoardManager>();
+            if (_m_playerManager == null)
+                _m_playerManager = FindObjectOfType<PlayerManager>();
+            if (_m_inputManager == null)
+                _m_inputManager = FindObjectOfType<InputManager>();
+            if (_m_uiManager == null)
+                _m_uiManager = FindObjectOfType<UIManager>();
+            
             // 验证组件引用
+            if (_m_gameStateManager == null)
+                Debug.LogError("[GameManager] GameStateManager 引用缺失");
             if (_m_boardManager == null)
                 Debug.LogError("[GameManager] BoardManager 引用缺失");
             if (_m_playerManager == null)
@@ -388,7 +594,7 @@ namespace BlokusGame.Core.Managers
                         if (currentPlayer != null && !currentPlayer.canContinueGame(_m_boardManager))
                         {
                             Debug.Log($"[GameManager] 玩家 {_m_currentPlayerId} 无法继续游戏，跳过回合");
-                            GameEvents.instance.onTurnSkipped?.Invoke(_m_currentPlayerId, "无有效移动");
+                            GameEvents.onPlayerSkipped?.Invoke(_m_currentPlayerId);
                             endCurrentTurn();
                         }
                     }
@@ -397,7 +603,7 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
-        /// 切换到下一个玩家
+        /// 切换到下一个玩家（备用方案，当GameStateManager不可用时使用）
         /// </summary>
         private void _nextPlayer()
         {
@@ -424,7 +630,14 @@ namespace BlokusGame.Core.Managers
             while (!_m_playerManager.isPlayerActive(nextPlayerId));
             
             _m_currentPlayerId = nextPlayerId;
-            Debug.Log($"[GameManager] 切换到玩家 {_m_currentPlayerId}");
+            
+            // 如果回到第一个玩家，增加回合数
+            if (_m_currentPlayerId == 1)
+            {
+                _m_turnNumber++;
+            }
+            
+            Debug.Log($"[GameManager] 切换到玩家 {_m_currentPlayerId}，第 {_m_turnNumber} 回合");
         }
         
         /// <summary>
@@ -465,7 +678,7 @@ namespace BlokusGame.Core.Managers
             _setGameState(GameState.GameEnded);
             
             // 触发游戏结束事件
-            GameEvents.instance.onGameEnded?.Invoke(winnerId, finalScores);
+            GameEvents.onGameEnded?.Invoke(finalScores);
             
             Debug.Log($"[GameManager] 获胜者: 玩家 {winnerId}");
         }
@@ -473,14 +686,14 @@ namespace BlokusGame.Core.Managers
         /// <summary>
         /// 计算最终结果
         /// </summary>
-        /// <returns>获胜者ID和所有玩家分数</returns>
-        private (int winnerId, int[] finalScores) _calculateFinalResults()
+        /// <returns>获胜者ID和所有玩家分数字典</returns>
+        private (int winnerId, Dictionary<int, int> finalScores) _calculateFinalResults()
         {
             if (_m_playerManager == null)
-                return (0, new int[0]);
+                return (0, new Dictionary<int, int>());
             
             int playerCount = _m_playerManager.getPlayerCount();
-            int[] scores = new int[playerCount];
+            var scores = new Dictionary<int, int>();
             int winnerId = 1;
             int highestScore = -1;
             
@@ -490,12 +703,13 @@ namespace BlokusGame.Core.Managers
                 var player = _m_playerManager.getPlayer(i);
                 if (player != null)
                 {
-                    scores[i - 1] = player.calculateScore();
+                    int playerScore = player.calculateScore();
+                    scores[i] = playerScore;
                     
                     // 找出最高分玩家
-                    if (scores[i - 1] > highestScore)
+                    if (playerScore > highestScore)
                     {
-                        highestScore = scores[i - 1];
+                        highestScore = playerScore;
                         winnerId = i;
                     }
                 }
@@ -509,7 +723,18 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         private void _resetGameState()
         {
-            _m_currentPlayerId = 1;
+            // 委托给GameStateManager重置状态
+            if (_m_gameStateManager != null)
+            {
+                _m_gameStateManager.resetGame();
+            }
+            else
+            {
+                // 备用方案：直接重置
+                _m_currentPlayerId = 1;
+                _m_turnNumber = 1;
+            }
+            
             _m_gameStartTime = 0f;
             _m_lastAutoSaveTime = 0f;
             _m_isPaused = false;
@@ -587,6 +812,4 @@ namespace BlokusGame.Core.Managers
         
         #endregion
     }
-    
-
 }
