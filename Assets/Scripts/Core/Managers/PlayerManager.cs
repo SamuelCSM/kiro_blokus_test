@@ -176,7 +176,7 @@ namespace BlokusGame.Core.Managers
             aiPlayerObj.transform.SetParent(transform);
             var aiPlayer = aiPlayerObj.AddComponent<AIPlayer>();
             aiPlayer.initializePlayer(2, "AI对手", _getPlayerColor(1));
-            aiPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
+            aiPlayer.setDifficulty(AIDifficulty.Medium);
             _m_players.Add(aiPlayer);
             
             if (_m_enableDebugLog)
@@ -241,7 +241,7 @@ namespace BlokusGame.Core.Managers
             tutorAIObj.transform.SetParent(transform);
             var tutorAI = tutorAIObj.AddComponent<AIPlayer>();
             tutorAI.initializePlayer(2, "教学助手", _getPlayerColor(1));
-            tutorAI.setDifficulty(_IAIPlayer.AIDifficulty.Easy);
+            tutorAI.setDifficulty(AIDifficulty.Easy);
             _m_players.Add(tutorAI);
             
             if (_m_enableDebugLog)

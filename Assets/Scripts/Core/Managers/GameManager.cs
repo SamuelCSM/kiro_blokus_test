@@ -92,6 +92,9 @@ namespace BlokusGame.Core.Managers
         /// <summary>游戏进行时间（秒）</summary>
         public float gameTime => Time.time - _m_gameStartTime;
         
+        /// <summary>当前是否轮到当前玩家的回合</summary>
+        public bool isCurrentPlayerTurn => isGameActive && !_m_isPaused;
+        
         #region Unity生命周期
         
         /// <summary>

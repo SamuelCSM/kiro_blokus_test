@@ -51,18 +51,18 @@ namespace BlokusGame.Tests
         public void testAIDifficultyBehavior()
         {
             // 测试简单难度
-            _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Easy);
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Easy, _m_testAIPlayer.difficulty, "AI难度应该设置为Easy");
+            _m_testAIPlayer.setDifficulty(AIDifficulty.Easy);
+            Assert.AreEqual(AIDifficulty.Easy, _m_testAIPlayer.difficulty, "AI难度应该设置为Easy");
             Assert.AreEqual(1.0f, _m_testAIPlayer.thinkingTime, "Easy难度的思考时间应该为1秒");
             
             // 测试中等难度
-            _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Medium, _m_testAIPlayer.difficulty, "AI难度应该设置为Medium");
+            _m_testAIPlayer.setDifficulty(AIDifficulty.Medium);
+            Assert.AreEqual(AIDifficulty.Medium, _m_testAIPlayer.difficulty, "AI难度应该设置为Medium");
             Assert.AreEqual(2.0f, _m_testAIPlayer.thinkingTime, "Medium难度的思考时间应该为2秒");
             
             // 测试困难难度
-            _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Hard);
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度应该设置为Hard");
+            _m_testAIPlayer.setDifficulty(AIDifficulty.Hard);
+            Assert.AreEqual(AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度应该设置为Hard");
             Assert.AreEqual(3.0f, _m_testAIPlayer.thinkingTime, "Hard难度的思考时间应该为3秒");
             
             Debug.Log("[AIPlayerAdvancedTest] AI难度设置测试通过");
@@ -157,7 +157,7 @@ namespace BlokusGame.Tests
             
             // 测试所有接口方法
             Assert.DoesNotThrow(() => {
-                aiInterface.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
+                aiInterface.setDifficulty(AIDifficulty.Medium);
                 aiInterface.setThinkingTime(2.0f);
                 aiInterface.evaluateMove(null, Vector2Int.zero, null);
                 aiInterface.getBestMove(null);
@@ -208,9 +208,9 @@ namespace BlokusGame.Tests
         {
             // 测试无效难度设置（虽然枚举通常不会有无效值，但测试边界情况）
             Assert.DoesNotThrow(() => {
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Easy);
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Hard);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Easy);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Medium);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Hard);
             }, "设置有效难度不应该抛出异常");
             
             // 测试极端思考时间值
@@ -254,11 +254,11 @@ namespace BlokusGame.Tests
             
             for (int i = 0; i < 1000; i++)
             {
-                _IAIPlayer.AIDifficulty difficulty = (i % 3) switch
+                AIDifficulty difficulty = (i % 3) switch
                 {
-                    0 => _IAIPlayer.AIDifficulty.Easy,
-                    1 => _IAIPlayer.AIDifficulty.Medium,
-                    _ => _IAIPlayer.AIDifficulty.Hard
+                    0 => AIDifficulty.Easy,
+                    1 => AIDifficulty.Medium,
+                    _ => AIDifficulty.Hard
                 };
                 _m_testAIPlayer.setDifficulty(difficulty);
             }
@@ -283,7 +283,7 @@ namespace BlokusGame.Tests
             // 执行大量AI操作
             for (int i = 0; i < 100; i++)
             {
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Medium);
                 _m_testAIPlayer.setThinkingTime(1.0f);
                 _m_testAIPlayer.evaluateMove(null, Vector2Int.zero, null);
                 _m_testAIPlayer.getBestMove(null);

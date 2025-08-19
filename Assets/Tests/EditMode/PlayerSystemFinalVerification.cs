@@ -92,7 +92,7 @@ namespace BlokusGame.Tests
             Assert.IsNotNull(aiInterface, "AIPlayer应该可以转换为_IAIPlayer接口");
             
             // 验证AI属性
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Medium, aiInterface.difficulty, "默认AI难度应该为Medium");
+            Assert.AreEqual(AIDifficulty.Medium, aiInterface.difficulty, "默认AI难度应该为Medium");
             Assert.IsFalse(aiInterface.isThinking, "初始状态AI不应该在思考");
             Assert.Greater(aiInterface.thinkingTime, 0f, "思考时间应该大于0");
             
@@ -146,12 +146,12 @@ namespace BlokusGame.Tests
             
             // 测试AI特有方法
             Assert.DoesNotThrow(() => {
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Hard);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Hard);
                 _m_testAIPlayer.setThinkingTime(3.0f);
                 _m_testAIPlayer.stopThinking();
                 
                 // 验证设置是否生效
-                Assert.AreEqual(_IAIPlayer.AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度设置应该生效");
+                Assert.AreEqual(AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度设置应该生效");
                 Assert.AreEqual(3.0f, _m_testAIPlayer.thinkingTime, "思考时间设置应该生效");
             }, "AI方法调用不应该抛出异常");
             

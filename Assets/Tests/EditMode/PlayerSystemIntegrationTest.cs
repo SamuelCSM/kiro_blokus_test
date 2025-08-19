@@ -100,7 +100,7 @@ namespace BlokusGame.Tests
             // 验证AI特有功能
             _IAIPlayer aiInterface = _m_testAIPlayer as _IAIPlayer;
             Assert.IsNotNull(aiInterface, "AI玩家应该可以转换为_IAIPlayer接口");
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Medium, aiInterface.difficulty, "默认AI难度应该为Medium");
+            Assert.AreEqual(AIDifficulty.Medium, aiInterface.difficulty, "默认AI难度应该为Medium");
             
             Debug.Log("[PlayerSystemIntegrationTest] 玩家类型区分测试通过");
         }
@@ -137,11 +137,11 @@ namespace BlokusGame.Tests
         public void testAIDecisionSystemIntegration()
         {
             // 测试AI难度设置
-            _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Easy);
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Easy, _m_testAIPlayer.difficulty, "AI难度应该正确设置");
+            _m_testAIPlayer.setDifficulty(AIDifficulty.Easy);
+            Assert.AreEqual(AIDifficulty.Easy, _m_testAIPlayer.difficulty, "AI难度应该正确设置");
             
-            _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Hard);
-            Assert.AreEqual(_IAIPlayer.AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度应该正确更新");
+            _m_testAIPlayer.setDifficulty(AIDifficulty.Hard);
+            Assert.AreEqual(AIDifficulty.Hard, _m_testAIPlayer.difficulty, "AI难度应该正确更新");
             
             // 测试思考时间设置
             _m_testAIPlayer.setThinkingTime(5.0f);
@@ -281,7 +281,7 @@ namespace BlokusGame.Tests
             
             for (int i = 0; i < 100; i++)
             {
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Medium);
                 _m_testAIPlayer.setThinkingTime(1.0f);
                 _m_testAIPlayer.stopThinking();
             }
@@ -316,7 +316,7 @@ namespace BlokusGame.Tests
                 }
                 
                 // 模拟AI思考
-                _m_testAIPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
+                _m_testAIPlayer.setDifficulty(AIDifficulty.Medium);
                 _m_testAIPlayer.stopThinking();
                 
                 // 模拟人类玩家操作

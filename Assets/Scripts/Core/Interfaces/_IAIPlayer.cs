@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using BlokusGame.Core.Data;
 
 namespace BlokusGame.Core.Interfaces
 {
@@ -9,17 +10,6 @@ namespace BlokusGame.Core.Interfaces
     /// </summary>
     public interface _IAIPlayer : _IPlayer
     {
-        /// <summary>AI难度等级枚举</summary>
-        public enum AIDifficulty
-        {
-            /// <summary>简单 - 随机选择有效移动</summary>
-            Easy,
-            /// <summary>中等 - 基于启发式算法</summary>
-            Medium,
-            /// <summary>困难 - 使用前瞻搜索算法</summary>
-            Hard
-        }
-        
         /// <summary>当前AI难度等级</summary>
         AIDifficulty difficulty { get; }
         

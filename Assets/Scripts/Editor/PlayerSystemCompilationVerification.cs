@@ -413,7 +413,7 @@ namespace BlokusGame.Editor
                 
                 // 基础功能测试
                 player.initializePlayer(1, "测试玩家", Color.red);
-                aiPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Hard);
+                aiPlayer.setDifficulty(AIDifficulty.Hard);
                 humanPlayer.initializePlayer(2, "人类玩家", Color.blue);
                 
                 Debug.Log("✅ 快速测试通过 - 所有类都能正常创建和调用");

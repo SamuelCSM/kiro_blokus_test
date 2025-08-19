@@ -17,7 +17,7 @@ namespace BlokusGame.Core.Player
     {
         [Header("AI配置")]
         /// <summary>AI难度等级</summary>
-        [SerializeField] private _IAIPlayer.AIDifficulty _m_difficulty = _IAIPlayer.AIDifficulty.Medium;
+        [SerializeField] private AIDifficulty _m_difficulty = AIDifficulty.Medium;
         
         /// <summary>AI思考时间（秒）</summary>
         [SerializeField] private float _m_thinkingTime = 2.0f;
@@ -35,6 +35,10 @@ namespace BlokusGame.Core.Player
         /// <summary>进攻权重，影响AI对扩展自己领域的重视程度</summary>
         [SerializeField] [Range(0f, 2f)] private float _m_aggressiveWeight = 1.0f;
         
+        [Header("调试设置")]
+        /// <summary>是否启用详细日志输出</summary>
+        [SerializeField] private bool _m_enableDetailedLogging = false;
+        
         // 私有字段
         /// <summary>当前思考协程</summary>
         private Coroutine _m_thinkingCoroutine;
@@ -44,7 +48,7 @@ namespace BlokusGame.Core.Player
         
         // 接口属性实现
         /// <summary>当前AI难度等级</summary>
-        public _IAIPlayer.AIDifficulty difficulty => _m_difficulty;
+        public AIDifficulty difficulty => _m_difficulty;
         
         /// <summary>AI思考时间（秒）</summary>
         public float thinkingTime => _m_thinkingTime;
@@ -106,22 +110,22 @@ namespace BlokusGame.Core.Player
         /// 设置AI难度等级
         /// </summary>
         /// <param name="_difficulty">难度等级</param>
-        public void setDifficulty(_IAIPlayer.AIDifficulty _difficulty)
+        public void setDifficulty(AIDifficulty _difficulty)
         {
             _m_difficulty = _difficulty;
             
             // 根据难度调整参数
             switch (_difficulty)
             {
-                case _IAIPlayer.AIDifficulty.Easy:
+                case AIDifficulty.Easy:
                     _m_randomnessFactor = 0.4f;
                     _m_thinkingTime = 1.0f;
                     break;
-                case _IAIPlayer.AIDifficulty.Medium:
+                case AIDifficulty.Medium:
                     _m_randomnessFactor = 0.2f;
                     _m_thinkingTime = 2.0f;
                     break;
-                case _IAIPlayer.AIDifficulty.Hard:
+                case AIDifficulty.Hard:
                     _m_randomnessFactor = 0.05f;
                     _m_thinkingTime = 3.0f;
                     break;
@@ -275,13 +279,13 @@ namespace BlokusGame.Core.Player
             // 根据难度等级选择不同的搜索策略
             switch (_m_difficulty)
             {
-                case _IAIPlayer.AIDifficulty.Easy:
+                case AIDifficulty.Easy:
                     return _getRandomMove(_gameBoard);
                     
-                case _IAIPlayer.AIDifficulty.Medium:
+                case AIDifficulty.Medium:
                     return _getGreedyMove(_gameBoard);
                     
-                case _IAIPlayer.AIDifficulty.Hard:
+                case AIDifficulty.Hard:
                     return _getOptimalMove(_gameBoard);
                     
                 default:
