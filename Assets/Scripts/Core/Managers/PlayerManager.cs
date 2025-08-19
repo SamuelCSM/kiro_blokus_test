@@ -165,13 +165,18 @@ namespace BlokusGame.Core.Managers
         private void _createSinglePlayerVsAI()
         {
             // 创建人类玩家
-            var humanPlayer = new TempPlayer();
+            GameObject humanPlayerObj = new GameObject("HumanPlayer_1");
+            humanPlayerObj.transform.SetParent(transform);
+            var humanPlayer = humanPlayerObj.AddComponent<BlokusGame.Core.Player.Player>();
             humanPlayer.initializePlayer(1, "玩家", _getPlayerColor(0));
             _m_players.Add(humanPlayer);
             
             // 创建AI玩家
-            var aiPlayer = new TempPlayer();
+            GameObject aiPlayerObj = new GameObject("AIPlayer_2");
+            aiPlayerObj.transform.SetParent(transform);
+            var aiPlayer = aiPlayerObj.AddComponent<AIPlayer>();
             aiPlayer.initializePlayer(2, "AI对手", _getPlayerColor(1));
+            aiPlayer.setDifficulty(_IAIPlayer.AIDifficulty.Medium);
             _m_players.Add(aiPlayer);
             
             if (_m_enableDebugLog)
@@ -189,7 +194,9 @@ namespace BlokusGame.Core.Managers
         {
             for (int i = 0; i < _playerCount; i++)
             {
-                var player = new TempPlayer();
+                GameObject playerObj = new GameObject($"Player_{i + 1}");
+                playerObj.transform.SetParent(transform);
+                var player = playerObj.AddComponent<BlokusGame.Core.Player.Player>();
                 player.initializePlayer(i + 1, $"玩家{i + 1}", _getPlayerColor(i));
                 _m_players.Add(player);
             }
@@ -223,13 +230,18 @@ namespace BlokusGame.Core.Managers
         private void _createTutorialPlayers()
         {
             // 创建学习者玩家
-            var learnerPlayer = new TempPlayer();
+            GameObject learnerPlayerObj = new GameObject("LearnerPlayer_1");
+            learnerPlayerObj.transform.SetParent(transform);
+            var learnerPlayer = learnerPlayerObj.AddComponent<BlokusGame.Core.Player.Player>();
             learnerPlayer.initializePlayer(1, "学习者", _getPlayerColor(0));
             _m_players.Add(learnerPlayer);
             
             // 创建教学AI
-            var tutorAI = new TempPlayer();
+            GameObject tutorAIObj = new GameObject("TutorAI_2");
+            tutorAIObj.transform.SetParent(transform);
+            var tutorAI = tutorAIObj.AddComponent<AIPlayer>();
             tutorAI.initializePlayer(2, "教学助手", _getPlayerColor(1));
+            tutorAI.setDifficulty(_IAIPlayer.AIDifficulty.Easy);
             _m_players.Add(tutorAI);
             
             if (_m_enableDebugLog)
