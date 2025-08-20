@@ -219,7 +219,7 @@ namespace BlokusGame.Core.Pieces
                 _handleMouseInput();
             }
             // 处理触摸输入（移动设备）
-            else if (Input.touchCount > 0)
+            else if (UnityEngine.Input.touchCount > 0)
             {
                 _handleTouchInput();
             }
@@ -230,17 +230,17 @@ namespace BlokusGame.Core.Pieces
         /// </summary>
         private void _handleMouseInput()
         {
-            if (Input.GetMouseButtonDown(0))
+            if (UnityEngine.Input.GetMouseButtonDown(0))
             {
-                _onPointerDown(Input.mousePosition);
+                _onPointerDown(UnityEngine.Input.mousePosition);
             }
-            else if (Input.GetMouseButton(0))
+            else if (UnityEngine.Input.GetMouseButton(0))
             {
-                _onPointerDrag(Input.mousePosition);
+                _onPointerDrag(UnityEngine.Input.mousePosition);
             }
-            else if (Input.GetMouseButtonUp(0))
+            else if (UnityEngine.Input.GetMouseButtonUp(0))
             {
-                _onPointerUp(Input.mousePosition);
+                _onPointerUp(UnityEngine.Input.mousePosition);
             }
         }
         
@@ -249,7 +249,7 @@ namespace BlokusGame.Core.Pieces
         /// </summary>
         private void _handleTouchInput()
         {
-            Touch touch = Input.GetTouch(0);
+            Touch touch = UnityEngine.Input.GetTouch(0);
             
             switch (touch.phase)
             {
