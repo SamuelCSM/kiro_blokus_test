@@ -98,6 +98,24 @@ namespace BlokusGame.Core.Managers
         /// <summary>上一帧的双指角度（用于旋转检测）</summary>
         private float _m_lastPinchAngle;
         
+        /// <summary>触摸游戏逻辑集成系统</summary>
+        private TouchGameplayIntegration _m_gameplayIntegration;
+        
+        /// <summary>上次触摸事件处理时间</summary>
+        private float _m_lastTouchEventTime;
+        
+        /// <summary>当前帧触摸事件计数</summary>
+        private int _m_currentFrameTouchEvents;
+        
+        /// <summary>触摸事件缓存队列</summary>
+        private Queue<TouchEventData> _m_touchEventCache;
+        
+        /// <summary>防误触状态标记</summary>
+        private bool _m_isInAntiMistouchMode = false;
+        
+        /// <summary>上次有效触摸时间</summary>
+        private float _m_lastValidTouchTime;
+        
         /// <summary>旋转手势的最小角度变化</summary>
         [SerializeField] private float _m_rotationThreshold = 5f;
         
@@ -109,6 +127,26 @@ namespace BlokusGame.Core.Managers
         
         /// <summary>边缘滑动的最小距离</summary>
         [SerializeField] private float _m_edgeSwipeThreshold = 50f;
+        
+        [Header("防误触配置")]
+        /// <summary>同时触摸的最大数量</summary>
+        [SerializeField] private int _m_maxSimultaneousTouches = 5;
+        
+        /// <summary>触摸间隔最小时间（防止过快连续触摸）</summary>
+        [SerializeField] private float _m_minTouchInterval = 0.05f;
+        
+        /// <summary>无效触摸区域边界（屏幕边缘像素）</summary>
+        [SerializeField] private float _m_invalidTouchBorder = 20f;
+        
+        /// <summary>触摸压力阈值（如果设备支持）</summary>
+        [SerializeField] private float _m_pressureThreshold = 0.1f;
+        
+        [Header("性能优化配置")]
+        /// <summary>触摸事件处理频率限制（每秒最大次数）</summary>
+        [SerializeField] private int _m_maxTouchEventsPerSecond = 60;
+        
+        /// <summary>是否启用触摸事件缓存</summary>
+        [SerializeField] private bool _m_enableTouchEventCaching = true;
         
         /// <summary>
         /// 触摸反馈类型枚举
@@ -153,6 +191,38 @@ namespace BlokusGame.Core.Managers
             public float startTime;
             /// <summary>触摸的方块</summary>
             public GamePiece touchedPiece;
+            /// <summary>触摸压力（如果支持）</summary>
+            public float pressure;
+            /// <summary>是否为有效触摸</summary>
+            public bool isValid;
+        }
+        
+        /// <summary>
+        /// 触摸事件数据结构（用于缓存）
+        /// </summary>
+        private struct TouchEventData
+        {
+            /// <summary>事件类型</summary>
+            public TouchEventType eventType;
+            /// <summary>触摸数据</summary>
+            public TouchData touchData;
+            /// <summary>事件时间戳</summary>
+            public float timestamp;
+        }
+        
+        /// <summary>
+        /// 触摸事件类型枚举
+        /// </summary>
+        private enum TouchEventType
+        {
+            /// <summary>触摸开始</summary>
+            Began,
+            /// <summary>触摸移动</summary>
+            Moved,
+            /// <summary>触摸结束</summary>
+            Ended,
+            /// <summary>触摸取消</summary>
+            Canceled
         }
         
         #region Unity生命周期
@@ -182,6 +252,19 @@ namespace BlokusGame.Core.Managers
                     _m_feedbackSystem = gameObject.AddComponent<TouchFeedbackSystem>();
                 }
             }
+            
+            // 初始化游戏逻辑集成系统
+            _m_gameplayIntegration = GetComponent<TouchGameplayIntegration>();
+            if (_m_gameplayIntegration == null)
+            {
+                _m_gameplayIntegration = gameObject.AddComponent<TouchGameplayIntegration>();
+            }
+            
+            // 初始化触摸事件缓存
+            if (_m_enableTouchEventCaching)
+            {
+                _m_touchEventCache = new Queue<TouchEventData>();
+            }
         }
         
         /// <summary>
@@ -199,8 +282,18 @@ namespace BlokusGame.Core.Managers
         {
             if (!_m_enableTouchInput && !_m_enableMouseInput) return;
             
+            // 重置帧计数器
+            _m_currentFrameTouchEvents = 0;
+            
             _handleInput();
             _updateTouchState();
+            _processAntiMistouch();
+            
+            // 处理缓存的触摸事件
+            if (_m_enableTouchEventCaching)
+            {
+                _processCachedTouchEvents();
+            }
         }
         
         /// <summary>
@@ -395,6 +488,12 @@ namespace BlokusGame.Core.Managers
         /// <param name="_touch">触摸数据</param>
         private void _handleSingleTouch(Touch _touch)
         {
+            // 性能限制检查
+            if (!_canProcessTouchEvent()) return;
+            
+            // 防误触检查
+            if (!_isValidTouch(_touch)) return;
+            
             switch (_touch.phase)
             {
                 case TouchPhase.Began:
@@ -411,6 +510,8 @@ namespace BlokusGame.Core.Managers
                     _onTouchEnded(_touch);
                     break;
             }
+            
+            _m_currentFrameTouchEvents++;
         }
         
         /// <summary>
@@ -1159,6 +1260,218 @@ namespace BlokusGame.Core.Managers
             
             // 销毁效果对象
             Destroy(_effectObj);
+        }
+        
+        #endregion
+        
+        #region 私有方法 - 防误触和性能优化
+        
+        /// <summary>
+        /// 检查是否可以处理触摸事件（性能限制）
+        /// </summary>
+        /// <returns>是否可以处理</returns>
+        private bool _canProcessTouchEvent()
+        {
+            // 检查帧率限制
+            if (_m_currentFrameTouchEvents >= _m_maxTouchEventsPerSecond / 60) // 假设60FPS
+            {
+                return false;
+            }
+            
+            // 检查时间间隔
+            float currentTime = Time.time;
+            if (currentTime - _m_lastTouchEventTime < _m_minTouchInterval)
+            {
+                return false;
+            }
+            
+            _m_lastTouchEventTime = currentTime;
+            return true;
+        }
+        
+        /// <summary>
+        /// 验证触摸是否有效（防误触）
+        /// </summary>
+        /// <param name="_touch">触摸数据</param>
+        /// <returns>是否为有效触摸</returns>
+        private bool _isValidTouch(Touch _touch)
+        {
+            // 检查触摸位置是否在有效区域内
+            if (!_isTouchPositionValid(_touch.position))
+            {
+                return false;
+            }
+            
+            // 检查触摸压力（如果设备支持）
+            if (_touch.pressure > 0 && _touch.pressure < _m_pressureThreshold)
+            {
+                return false;
+            }
+            
+            // 检查同时触摸数量
+            if (UnityEngine.Input.touchCount > _m_maxSimultaneousTouches)
+            {
+                return false;
+            }
+            
+            // 检查触摸间隔
+            float currentTime = Time.time;
+            if (currentTime - _m_lastValidTouchTime < _m_minTouchInterval)
+            {
+                return false;
+            }
+            
+            _m_lastValidTouchTime = currentTime;
+            return true;
+        }
+        
+        /// <summary>
+        /// 检查触摸位置是否有效
+        /// </summary>
+        /// <param name="_position">触摸位置</param>
+        /// <returns>是否有效</returns>
+        private bool _isTouchPositionValid(Vector2 _position)
+        {
+            // 检查是否在屏幕边缘的无效区域
+            if (_position.x < _m_invalidTouchBorder || 
+                _position.x > Screen.width - _m_invalidTouchBorder ||
+                _position.y < _m_invalidTouchBorder || 
+                _position.y > Screen.height - _m_invalidTouchBorder)
+            {
+                return false;
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// 处理防误触逻辑
+        /// </summary>
+        private void _processAntiMistouch()
+        {
+            // 检测异常触摸模式
+            if (UnityEngine.Input.touchCount > _m_maxSimultaneousTouches)
+            {
+                if (!_m_isInAntiMistouchMode)
+                {
+                    _m_isInAntiMistouchMode = true;
+                    Debug.LogWarning("[TouchInputManager] 检测到异常触摸模式，启用防误触模式");
+                    
+                    // 重置所有触摸状态
+                    resetInput();
+                }
+            }
+            else if (_m_isInAntiMistouchMode && UnityEngine.Input.touchCount == 0)
+            {
+                // 退出防误触模式
+                _m_isInAntiMistouchMode = false;
+                Debug.Log("[TouchInputManager] 退出防误触模式");
+            }
+        }
+        
+        /// <summary>
+        /// 处理缓存的触摸事件
+        /// </summary>
+        private void _processCachedTouchEvents()
+        {
+            if (_m_touchEventCache == null) return;
+            
+            int processedEvents = 0;
+            int maxEventsPerFrame = 5; // 每帧最多处理5个缓存事件
+            
+            while (_m_touchEventCache.Count > 0 && processedEvents < maxEventsPerFrame)
+            {
+                TouchEventData eventData = _m_touchEventCache.Dequeue();
+                
+                // 检查事件是否过期（超过100ms的事件丢弃）
+                if (Time.time - eventData.timestamp > 0.1f)
+                {
+                    continue;
+                }
+                
+                // 处理缓存的事件
+                _processCachedTouchEvent(eventData);
+                processedEvents++;
+            }
+        }
+        
+        /// <summary>
+        /// 处理单个缓存的触摸事件
+        /// </summary>
+        /// <param name="_eventData">事件数据</param>
+        private void _processCachedTouchEvent(TouchEventData _eventData)
+        {
+            // 根据事件类型处理
+            switch (_eventData.eventType)
+            {
+                case TouchEventType.Began:
+                    // 处理延迟的触摸开始事件
+                    break;
+                    
+                case TouchEventType.Moved:
+                    // 处理延迟的触摸移动事件
+                    break;
+                    
+                case TouchEventType.Ended:
+                    // 处理延迟的触摸结束事件
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// 将触摸事件添加到缓存
+        /// </summary>
+        /// <param name="_eventType">事件类型</param>
+        /// <param name="_touchData">触摸数据</param>
+        private void _cacheTouchEvent(TouchEventType _eventType, TouchData _touchData)
+        {
+            if (!_m_enableTouchEventCaching || _m_touchEventCache == null) return;
+            
+            TouchEventData eventData = new TouchEventData
+            {
+                eventType = _eventType,
+                touchData = _touchData,
+                timestamp = Time.time
+            };
+            
+            _m_touchEventCache.Enqueue(eventData);
+            
+            // 限制缓存大小
+            while (_m_touchEventCache.Count > 50)
+            {
+                _m_touchEventCache.Dequeue();
+            }
+        }
+        
+        /// <summary>
+        /// 优化触摸处理性能
+        /// </summary>
+        private void _optimizeTouchPerformance()
+        {
+            // 根据设备性能调整处理频率
+            if (Application.targetFrameRate > 0 && Application.targetFrameRate < 30)
+            {
+                // 低性能设备，降低处理频率
+                _m_maxTouchEventsPerSecond = Mathf.Min(_m_maxTouchEventsPerSecond, 30);
+            }
+            
+            // 根据触摸数量动态调整
+            if (UnityEngine.Input.touchCount > 2)
+            {
+                // 多点触摸时降低处理频率
+                _m_maxTouchEventsPerSecond = Mathf.Min(_m_maxTouchEventsPerSecond, 40);
+            }
+        }
+        
+        /// <summary>
+        /// 获取触摸性能统计信息
+        /// </summary>
+        /// <returns>性能统计字符串</returns>
+        public string getTouchPerformanceStats()
+        {
+            return $"触摸事件/秒: {_m_currentFrameTouchEvents * 60}, " +
+                   $"缓存事件: {(_m_touchEventCache?.Count ?? 0)}, " +
+                   $"防误触模式: {_m_isInAntiMistouchMode}";
         }
         
         #endregion

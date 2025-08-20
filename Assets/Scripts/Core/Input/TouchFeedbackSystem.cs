@@ -100,7 +100,11 @@ namespace BlokusGame.Core.InputSystem
             /// <summary>中等</summary>
             Medium,
             /// <summary>强烈</summary>
-            Strong
+            Strong,
+            /// <summary>成功操作</summary>
+            Success,
+            /// <summary>错误操作</summary>
+            Error
         }
         
         #region Unity生命周期
@@ -285,6 +289,14 @@ namespace BlokusGame.Core.InputSystem
                         break;
                     case FeedbackType.Medium:
                     case FeedbackType.Strong:
+                        Handheld.Vibrate();
+                        break;
+                    case FeedbackType.Success:
+                        // 成功操作的触觉反馈（轻微）
+                        Handheld.Vibrate();
+                        break;
+                    case FeedbackType.Error:
+                        // 错误操作的触觉反馈（强烈）
                         Handheld.Vibrate();
                         break;
                 }

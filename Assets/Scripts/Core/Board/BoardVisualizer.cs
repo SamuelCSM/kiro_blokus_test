@@ -98,6 +98,15 @@ namespace BlokusGame.Core.Board
         /// <summary>上一帧的双指距离（用于缩放）</summary>
         private float _m_lastTouchDistance;
         
+        /// <summary>棋盘根变换对象</summary>
+        private Transform _m_boardRoot;
+        
+        /// <summary>初始棋盘位置</summary>
+        private Vector3 _m_initialPosition;
+        
+        /// <summary>初始棋盘缩放</summary>
+        private Vector3 _m_initialScale;
+        
         /// <summary>
         /// Unity生命周期 - 初始化组件
         /// </summary>

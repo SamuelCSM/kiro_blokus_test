@@ -268,6 +268,36 @@ namespace BlokusGame.Core.Pieces
             Debug.Log($"[GamePiece] 方块 {pieceId} 设置变换: 旋转{_m_rotationCount * 90}度, 翻转{_isFlipped}");
         }
         
+        /// <summary>
+        /// 设置方块的放置状态
+        /// </summary>
+        /// <param name="_placed">是否已放置</param>
+        public void setPlaced(bool _placed)
+        {
+            _m_isPlaced = _placed;
+            
+            // 更新可视化状态
+            if (_m_pieceVisualizer != null)
+            {
+                if (_placed)
+                {
+                    _m_pieceVisualizer.setVisualState(PieceVisualizer.PieceVisualState.Placed);
+                }
+                else
+                {
+                    _m_pieceVisualizer.setVisualState(PieceVisualizer.PieceVisualState.Normal);
+                }
+            }
+            
+            // 更新交互状态
+            if (_m_interactionController != null)
+            {
+                _m_interactionController.setInteractionEnabled(!_placed);
+            }
+            
+            Debug.Log($"[GamePiece] 方块 {pieceId} 放置状态设置为: {_placed}");
+        }
+        
         #endregion
         
         #region 私有方法

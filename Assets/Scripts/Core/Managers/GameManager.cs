@@ -454,6 +454,104 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
+        /// 尝试放置方块
+        /// 验证方块放置的合法性并执行放置操作
+        /// </summary>
+        /// <param name="_playerId">玩家ID</param>
+        /// <param name="_pieceId">方块ID</param>
+        /// <param name="_position">放置位置</param>
+        /// <returns>是否放置成功</returns>
+        public bool tryPlacePiece(int _playerId, int _pieceId, Vector2Int _position)
+        {
+            // 检查游戏状态
+            if (!isGameActive)
+            {
+                Debug.LogWarning("[GameManager] 游戏未进行中，无法放置方块");
+                return false;
+            }
+            
+            // 检查是否轮到该玩家
+            if (_playerId != _m_currentPlayerId)
+            {
+                Debug.LogWarning($"[GameManager] 不是玩家 {_playerId} 的回合，当前回合玩家: {_m_currentPlayerId}");
+                return false;
+            }
+            
+            // 获取玩家
+            if (_m_playerManager == null)
+            {
+                Debug.LogError("[GameManager] PlayerManager未初始化");
+                return false;
+            }
+            
+            var player = _m_playerManager.getPlayer(_playerId);
+            if (player == null)
+            {
+                Debug.LogError($"[GameManager] 未找到玩家 {_playerId}");
+                return false;
+            }
+            
+            // 获取方块
+            var piece = player.getPiece(_pieceId);
+            if (piece == null)
+            {
+                Debug.LogError($"[GameManager] 玩家 {_playerId} 没有方块 {_pieceId}");
+                return false;
+            }
+            
+            // 检查方块是否已放置
+            if (piece.isPlaced)
+            {
+                Debug.LogWarning($"[GameManager] 方块 {_pieceId} 已经放置");
+                return false;
+            }
+            
+            // 使用棋盘管理器验证和放置方块
+            if (_m_boardManager == null)
+            {
+                Debug.LogError("[GameManager] BoardManager未初始化");
+                return false;
+            }
+            
+            bool placementSuccess = _m_boardManager.tryPlacePiece(piece, _position, _playerId);
+            
+            if (placementSuccess)
+            {
+                Debug.Log($"[GameManager] 玩家 {_playerId} 成功放置方块 {_pieceId} 在位置 {_position}");
+                
+                // 标记方块为已放置
+                piece.setPlacedState(true);
+                
+                // 触发方块放置事件
+                GameEvents.onPiecePlaced?.Invoke(_playerId, piece, _position);
+                
+                // 检查是否需要结束回合
+                if (_shouldEndTurnAfterPlacement(_playerId))
+                {
+                    endCurrentTurn();
+                }
+                
+                return true;
+            }
+            else
+            {
+                Debug.LogWarning($"[GameManager] 玩家 {_playerId} 无法在位置 {_position} 放置方块 {_pieceId}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// 检查放置方块后是否应该结束回合
+        /// </summary>
+        /// <param name="_playerId">玩家ID</param>
+        /// <returns>是否应该结束回合</returns>
+        private bool _shouldEndTurnAfterPlacement(int _playerId)
+        {
+            // 在Blokus游戏中，每次放置方块后都会结束回合
+            return true;
+        }
+        
+        /// <summary>
         /// 结束游戏
         /// 计算最终得分，触发游戏结束事件
         /// </summary>

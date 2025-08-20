@@ -112,6 +112,32 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
+        /// 尝试在指定位置放置方块（包含验证）
+        /// </summary>
+        /// <param name="_piece">要放置的方块</param>
+        /// <param name="_position">放置位置</param>
+        /// <param name="_playerId">玩家ID</param>
+        /// <returns>是否放置成功</returns>
+        public bool tryPlacePiece(_IGamePiece _piece, Vector2Int _position, int _playerId)
+        {
+            if (_m_boardController == null)
+            {
+                Debug.LogError("[BoardManager] 棋盘控制器未初始化");
+                return false;
+            }
+            
+            // 首先验证放置是否有效
+            if (!isValidPlacement(_piece, _position, _playerId))
+            {
+                Debug.LogWarning($"[BoardManager] 玩家 {_playerId} 无法在位置 {_position} 放置方块");
+                return false;
+            }
+            
+            // 执行放置
+            return placePiece(_piece, _position, _playerId);
+        }
+        
+        /// <summary>
         /// 在指定位置放置方块
         /// </summary>
         /// <param name="_piece">要放置的方块</param>
@@ -215,6 +241,21 @@ namespace BlokusGame.Core.Managers
             }
             
             return _m_boardController.getBoardState();
+        }
+        
+        /// <summary>
+        /// 获取棋盘系统实例
+        /// </summary>
+        /// <returns>棋盘系统实例</returns>
+        public BoardSystem getBoardSystem()
+        {
+            if (_m_boardController == null)
+            {
+                Debug.LogError("[BoardManager] 棋盘控制器未初始化");
+                return null;
+            }
+            
+            return _m_boardController.getBoardSystem();
         }
         
         /// <summary>
@@ -328,15 +369,6 @@ namespace BlokusGame.Core.Managers
         public int getPlayerAtPosition(Vector2Int _position)
         {
             return getPositionOwner(_position);
-        }
-        
-        /// <summary>
-        /// 获取棋盘系统的直接引用（用于高级操作）
-        /// </summary>
-        /// <returns>棋盘系统实例</returns>
-        public BoardSystem getBoardSystem()
-        {
-            return _m_boardController?.getBoardSystem();
         }
     }
 }
