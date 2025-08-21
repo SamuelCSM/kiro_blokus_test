@@ -160,6 +160,15 @@ namespace BlokusGame.Core.Pieces
             Debug.Log($"[GamePiece] 方块 {pieceId} 重置到初始状态");
         }
         
+        /// <summary>
+        /// 获取方块包含的格子数量
+        /// </summary>
+        /// <returns>方块的格子数量</returns>
+        public int getSize()
+        {
+            return currentShape?.Length ?? 0;
+        }
+        
         #endregion
         
         #region 公共方法

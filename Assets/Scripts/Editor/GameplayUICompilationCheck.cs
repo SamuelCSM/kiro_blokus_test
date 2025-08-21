@@ -636,6 +636,7 @@ namespace BlokusGame.Editor
             }
             public void setPlacedState(bool _placed) { isPlaced = _placed; }
             public void resetToOriginalState() { }
+            public int getSize() { return currentShape?.Length ?? 0; }
         }
     }
 }

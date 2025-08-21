@@ -350,26 +350,23 @@ namespace BlokusGame.Core.UI
                 
                 var image = block.AddComponent<Image>();
                 image.color = _m_currentPiece.pieceColor;
-			}
-
+            }
+            
             // 设置位置
-            if (block != null)
+            var rectTransform = block.GetComponent<RectTransform>();
+            if (rectTransform != null)
             {
-	            var rectTransform = block.GetComponent<RectTransform>();
-	            if (rectTransform != null)
-	            {
-		            Vector2 localPos = new Vector2(
-			            _position.x * (_m_previewBlockSize + _m_previewBlockSpacing),
-			            _position.y * (_m_previewBlockSize + _m_previewBlockSpacing)
-		            ) + _centerOffset;
-
-		            rectTransform.anchoredPosition = localPos;
-		            rectTransform.localScale = Vector3.one;
-	            }
-
-	            _m_previewBlocks.Add(block);
-			}
-		}
+                Vector2 localPos = new Vector2(
+                    _position.x * (_m_previewBlockSize + _m_previewBlockSpacing),
+                    _position.y * (_m_previewBlockSize + _m_previewBlockSpacing)
+                ) + _centerOffset;
+                
+                rectTransform.anchoredPosition = localPos;
+                rectTransform.localScale = Vector3.one;
+            }
+            
+            _m_previewBlocks.Add(block);
+        }
         
         /// <summary>
         /// 清除预览格子

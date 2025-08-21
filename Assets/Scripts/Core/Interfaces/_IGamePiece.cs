@@ -51,5 +51,11 @@ namespace BlokusGame.Core.Interfaces
         /// 重置方块到初始状态（未旋转、未翻转）
         /// </summary>
         void resetToOriginalState();
+        
+        /// <summary>
+        /// 获取方块包含的格子数量
+        /// </summary>
+        /// <returns>方块的格子数量</returns>
+        int getSize();
     }
 }
