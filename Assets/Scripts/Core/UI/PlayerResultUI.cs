@@ -55,6 +55,26 @@ namespace BlokusGame.Core.UI
         /// <summary>普通文本颜色</summary>
         [SerializeField] private Color _m_normalTextColor = Color.white;
         
+        [Header("动画配置")]
+        /// <summary>是否启用入场动画</summary>
+        [SerializeField] private bool _m_enableEntranceAnimation = true;
+        
+        /// <summary>动画持续时间</summary>
+        [SerializeField] private float _m_animationDuration = 0.5f;
+        
+        /// <summary>动画延迟时间</summary>
+        [SerializeField] private float _m_animationDelay = 0f;
+        
+        [Header("详细统计显示")]
+        /// <summary>游戏时长文本</summary>
+        [SerializeField] private Text _m_gameTimeText;
+        
+        /// <summary>平均每回合时间文本</summary>
+        [SerializeField] private Text _m_avgTurnTimeText;
+        
+        /// <summary>最大连续放置文本</summary>
+        [SerializeField] private Text _m_maxStreakText;
+        
         // 私有字段
         /// <summary>玩家结果数据</summary>
         private PlayerResult _m_playerResult;
@@ -94,6 +114,9 @@ namespace BlokusGame.Core.UI
             
             // 设置特殊标识
             _setSpecialIndicators(_playerResult, _rank);
+            
+            // 设置详细统计信息
+            _setDetailedStats(_playerResult);
         }
         
         /// <summary>
@@ -122,6 +145,29 @@ namespace BlokusGame.Core.UI
         public int GetRank()
         {
             return _m_rank;
+        }
+        
+        /// <summary>
+        /// 播放入场动画
+        /// </summary>
+        public void PlayEntranceAnimation()
+        {
+            if (!_m_enableEntranceAnimation)
+                return;
+            
+            StartCoroutine(_playEntranceAnimationCoroutine());
+        }
+        
+        /// <summary>
+        /// 高亮显示结果（用于获胜者等特殊情况）
+        /// </summary>
+        /// <param name="_highlight">是否高亮</param>
+        public void SetHighlight(bool _highlight)
+        {
+            if (_highlight)
+            {
+                StartCoroutine(_playHighlightAnimation());
+            }
         }
         
         #endregion
@@ -235,6 +281,34 @@ namespace BlokusGame.Core.UI
         }
         
         /// <summary>
+        /// 设置详细统计信息
+        /// </summary>
+        /// <param name="_playerResult">玩家结果数据</param>
+        private void _setDetailedStats(PlayerResult _playerResult)
+        {
+            // 设置游戏时长
+            if (_m_gameTimeText != null)
+            {
+                float gameTimeMinutes = _playerResult.totalPlayTime / 60f;
+                _m_gameTimeText.text = $"游戏时长: {gameTimeMinutes:F1}分钟";
+            }
+            
+            // 设置平均每回合时间
+            if (_m_avgTurnTimeText != null)
+            {
+                _m_avgTurnTimeText.text = $"平均回合: {_playerResult.averageTurnTime:F1}秒";
+            }
+            
+            // 设置放置效率统计
+            if (_m_maxStreakText != null)
+            {
+                float efficiency = _playerResult.remainingPieces > 0 ? 
+                    (float)_playerResult.placedPieces / 21f * 100f : 100f;
+                _m_maxStreakText.text = $"完成度: {efficiency:F0}%";
+            }
+        }
+        
+        /// <summary>
         /// 获取排名对应的图标
         /// </summary>
         /// <param name="_rank">排名</param>
@@ -252,6 +326,110 @@ namespace BlokusGame.Core.UI
                 default:
                     return null;
             }
+        }
+        
+        /// <summary>
+        /// 入场动画协程
+        /// </summary>
+        /// <returns>协程枚举器</returns>
+        private System.Collections.IEnumerator _playEntranceAnimationCoroutine()
+        {
+            // 等待延迟时间
+            if (_m_animationDelay > 0f)
+            {
+                yield return new WaitForSeconds(_m_animationDelay);
+            }
+            
+            // 获取或添加CanvasGroup组件
+            CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+            
+            // 设置初始状态
+            canvasGroup.alpha = 0f;
+            transform.localScale = Vector3.zero;
+            
+            // 执行动画
+            float elapsedTime = 0f;
+            while (elapsedTime < _m_animationDuration)
+            {
+                elapsedTime += Time.unscaledDeltaTime;
+                float progress = elapsedTime / _m_animationDuration;
+                
+                // 使用缓动函数
+                float easedProgress = _easeOutBack(progress);
+                
+                canvasGroup.alpha = progress;
+                transform.localScale = Vector3.one * easedProgress;
+                
+                yield return null;
+            }
+            
+            // 确保最终状态
+            canvasGroup.alpha = 1f;
+            transform.localScale = Vector3.one;
+        }
+        
+        /// <summary>
+        /// 高亮动画协程
+        /// </summary>
+        /// <returns>协程枚举器</returns>
+        private System.Collections.IEnumerator _playHighlightAnimation()
+        {
+            // 获取或添加CanvasGroup组件
+            CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+            
+            // 闪烁效果
+            for (int i = 0; i < 3; i++)
+            {
+                // 变亮
+                float elapsedTime = 0f;
+                float duration = 0.2f;
+                
+                while (elapsedTime < duration)
+                {
+                    elapsedTime += Time.unscaledDeltaTime;
+                    float progress = elapsedTime / duration;
+                    
+                    canvasGroup.alpha = Mathf.Lerp(1f, 1.5f, progress);
+                    
+                    yield return null;
+                }
+                
+                // 变暗
+                elapsedTime = 0f;
+                while (elapsedTime < duration)
+                {
+                    elapsedTime += Time.unscaledDeltaTime;
+                    float progress = elapsedTime / duration;
+                    
+                    canvasGroup.alpha = Mathf.Lerp(1.5f, 1f, progress);
+                    
+                    yield return null;
+                }
+            }
+            
+            // 确保最终状态
+            canvasGroup.alpha = 1f;
+        }
+        
+        /// <summary>
+        /// 缓动函数：回弹效果
+        /// </summary>
+        /// <param name="_t">时间参数 (0-1)</param>
+        /// <returns>缓动后的值</returns>
+        private float _easeOutBack(float _t)
+        {
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1f;
+            
+            return 1f + c3 * Mathf.Pow(_t - 1f, 3f) + c1 * Mathf.Pow(_t - 1f, 2f);
         }
         
         #endregion
