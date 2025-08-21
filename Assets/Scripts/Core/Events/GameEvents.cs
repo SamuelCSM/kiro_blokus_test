@@ -57,8 +57,8 @@ namespace BlokusGame.Core.Events
         /// <summary>配置加载完成事件</summary>
         public System.Action onConfigLoaded;
         
-        /// <summary>游戏状态改变事件</summary>
-        public System.Action<GameState, GameState> onGameStateChanged;
+        /// <summary>游戏状态改变事件（双参数版本：旧状态，新状态）</summary>
+        public System.Action<GameState, GameState> onGameStateChangedDetailed;
         
         /// <summary>游戏模式改变事件</summary>
         public System.Action<GameMode> onGameModeChanged;
@@ -289,6 +289,41 @@ namespace BlokusGame.Core.Events
         /// </summary>
         public System.Action onStopMusic;
         
+        // 设置事件
+        
+        /// <summary>
+        /// 游戏设置变更事件
+        /// </summary>
+        /// <param name="_newSettings">新的游戏设置</param>
+        public System.Action<GameSettings> onSettingsChanged;
+        
+        // 计分和记录事件
+        
+        /// <summary>
+        /// 分数计算完成事件
+        /// </summary>
+        /// <param name="_gameResults">游戏结果</param>
+        public System.Action<GameResults> onScoreCalculated;
+        
+        /// <summary>
+        /// 游戏状态变更事件（单参数版本）
+        /// </summary>
+        /// <param name="_newState">新的游戏状态</param>
+        public System.Action<GameState, GameState> onGameStateChanged;
+        
+        /// <summary>
+        /// 方块预览更新事件
+        /// </summary>
+        /// <param name="_piece">预览的方块</param>
+        /// <param name="_position">预览位置</param>
+        /// <param name="_isValid">位置是否有效</param>
+        public System.Action<_IGamePiece, Vector2Int, bool> onPiecePreviewUpdated;
+        
+        /// <summary>
+        /// 方块预览结束事件
+        /// </summary>
+        public System.Action onPiecePreviewEnded;
+        
         /// <summary>
         /// Unity生命周期 - OnDestroy
         /// 清理所有事件订阅
@@ -344,6 +379,9 @@ namespace BlokusGame.Core.Events
                 onPlaySound = null;
                 onPlayMusic = null;
                 onStopMusic = null;
+                
+                // 清理设置事件
+                onSettingsChanged = null;
             }
         }
     }

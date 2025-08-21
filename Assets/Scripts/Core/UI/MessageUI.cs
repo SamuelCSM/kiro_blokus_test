@@ -7,6 +7,35 @@ using BlokusGame.Core.Events;
 namespace BlokusGame.Core.UI
 {
     /// <summary>
+    /// 消息数据结构
+    /// </summary>
+    [System.Serializable]
+    public struct MessageData
+    {
+        /// <summary>消息内容</summary>
+        public string message;
+        
+        /// <summary>消息类型</summary>
+        public MessageType messageType;
+        
+        /// <summary>显示时长</summary>
+        public float duration;
+        
+        /// <summary>
+        /// 构造函数
+        /// </summary>
+        /// <param name="_message">消息内容</param>
+        /// <param name="_messageType">消息类型</param>
+        /// <param name="_duration">显示时长</param>
+        public MessageData(string _message, MessageType _messageType, float _duration)
+        {
+            message = _message;
+            messageType = _messageType;
+            duration = _duration;
+        }
+    }
+
+    /// <summary>
     /// 消息UI - 显示各种提示消息和通知
     /// 支持不同类型的消息显示和自动隐藏功能
     /// </summary>
@@ -61,6 +90,12 @@ namespace BlokusGame.Core.UI
         /// <summary>默认自动隐藏时间</summary>
         private const float DEFAULT_AUTO_HIDE_DURATION = 3f;
         
+        /// <summary>消息队列</summary>
+        private System.Collections.Generic.Queue<MessageData> _m_messageQueue = new System.Collections.Generic.Queue<MessageData>();
+        
+        /// <summary>是否正在显示消息</summary>
+        private bool _m_isShowingMessage = false;
+        
         #region UIBase实现
         
         /// <summary>
@@ -106,30 +141,41 @@ namespace BlokusGame.Core.UI
                 return;
             }
             
-            _m_currentMessageType = _messageType;
+            var messageData = new MessageData(_message, _messageType, _duration);
             
-            // 设置消息内容
-            if (_m_messageText != null)
+            // 如果当前正在显示消息，加入队列
+            if (_m_isShowingMessage)
             {
-                _m_messageText.text = _message;
+                _m_messageQueue.Enqueue(messageData);
+                
+                if (_m_enableDetailedLogging)
+                {
+                    Debug.Log($"[MessageUI] 消息加入队列: {_message} (队列长度: {_m_messageQueue.Count})");
+                }
+                return;
             }
             
-            // 设置消息样式
-            _applyMessageStyle(_messageType);
-            
-            // 显示UI
-            Show(true);
-            
-            // 设置自动隐藏
-            if (_duration > 0f)
+            // 立即显示消息
+            _displayMessage(messageData);
+        }
+        
+        /// <summary>
+        /// 显示消息（立即显示，跳过队列）
+        /// </summary>
+        /// <param name="_message">消息内容</param>
+        /// <param name="_messageType">消息类型</param>
+        /// <param name="_duration">显示时长</param>
+        public void ShowMessageImmediate(string _message, MessageType _messageType = MessageType.Info, float _duration = DEFAULT_AUTO_HIDE_DURATION)
+        {
+            if (string.IsNullOrEmpty(_message))
             {
-                _startAutoHide(_duration);
+                Debug.LogWarning("[MessageUI] 尝试显示空消息");
+                return;
             }
             
-            if (_m_enableDetailedLogging)
-            {
-                Debug.Log($"[MessageUI] 显示{_messageType}消息: {_message}");
-            }
+            // 清空队列并立即显示
+            _m_messageQueue.Clear();
+            _displayMessage(new MessageData(_message, _messageType, _duration));
         }
         
         /// <summary>
@@ -139,11 +185,37 @@ namespace BlokusGame.Core.UI
         {
             _stopAutoHide();
             Hide(true);
+            _m_isShowingMessage = false;
+            
+            // 处理队列中的下一条消息
+            _processNextMessage();
             
             if (_m_enableDetailedLogging)
             {
                 Debug.Log("[MessageUI] 隐藏消息");
             }
+        }
+        
+        /// <summary>
+        /// 清空消息队列
+        /// </summary>
+        public void ClearMessageQueue()
+        {
+            _m_messageQueue.Clear();
+            
+            if (_m_enableDetailedLogging)
+            {
+                Debug.Log("[MessageUI] 消息队列已清空");
+            }
+        }
+        
+        /// <summary>
+        /// 获取队列中的消息数量
+        /// </summary>
+        /// <returns>队列中的消息数量</returns>
+        public int GetQueuedMessageCount()
+        {
+            return _m_messageQueue.Count;
         }
         
         /// <summary>
@@ -352,6 +424,148 @@ namespace BlokusGame.Core.UI
             yield return new WaitForSeconds(_duration);
             HideMessage();
             _m_autoHideCoroutine = null;
+        }
+        
+        #endregion
+        
+        #region 私有方法 - 消息队列处理
+        
+        /// <summary>
+        /// 显示消息（内部方法）
+        /// </summary>
+        /// <param name="_messageData">消息数据</param>
+        private void _displayMessage(MessageData _messageData)
+        {
+            _m_isShowingMessage = true;
+            _m_currentMessageType = _messageData.messageType;
+            
+            // 设置消息内容
+            if (_m_messageText != null)
+            {
+                _m_messageText.text = _messageData.message;
+            }
+            
+            // 设置消息样式
+            _applyMessageStyle(_messageData.messageType);
+            
+            // 显示UI
+            Show(true);
+            
+            // 设置自动隐藏
+            if (_messageData.duration > 0f)
+            {
+                _startAutoHide(_messageData.duration);
+            }
+            
+            // 播放消息音效
+            _playMessageSound(_messageData.messageType);
+            
+            if (_m_enableDetailedLogging)
+            {
+                Debug.Log($"[MessageUI] 显示{_messageData.messageType}消息: {_messageData.message}");
+            }
+        }
+        
+        /// <summary>
+        /// 处理队列中的下一条消息
+        /// </summary>
+        private void _processNextMessage()
+        {
+            if (_m_messageQueue.Count > 0)
+            {
+                var nextMessage = _m_messageQueue.Dequeue();
+                
+                // 延迟一小段时间再显示下一条消息
+                StartCoroutine(_delayedShowMessage(nextMessage, 0.5f));
+            }
+        }
+        
+        /// <summary>
+        /// 延迟显示消息协程
+        /// </summary>
+        /// <param name="_messageData">消息数据</param>
+        /// <param name="_delay">延迟时间</param>
+        /// <returns>协程枚举器</returns>
+        private IEnumerator _delayedShowMessage(MessageData _messageData, float _delay)
+        {
+            yield return new WaitForSeconds(_delay);
+            _displayMessage(_messageData);
+        }
+        
+        /// <summary>
+        /// 播放消息音效
+        /// </summary>
+        /// <param name="_messageType">消息类型</param>
+        private void _playMessageSound(MessageType _messageType)
+        {
+            string soundName = "";
+            
+            switch (_messageType)
+            {
+                case MessageType.Info:
+                    soundName = "MessageInfo";
+                    break;
+                case MessageType.Success:
+                    soundName = "MessageSuccess";
+                    break;
+                case MessageType.Warning:
+                    soundName = "MessageWarning";
+                    break;
+                case MessageType.Error:
+                    soundName = "MessageError";
+                    break;
+            }
+            
+            if (!string.IsNullOrEmpty(soundName))
+            {
+                GameEvents.instance.onPlaySound?.Invoke(soundName);
+            }
+        }
+        
+        #endregion
+        
+        #region 公共方法 - 扩展功能
+        
+        /// <summary>
+        /// 检查是否正在显示消息
+        /// </summary>
+        /// <returns>是否正在显示消息</returns>
+        public bool IsShowingMessage()
+        {
+            return _m_isShowingMessage;
+        }
+        
+        /// <summary>
+        /// 获取当前消息类型
+        /// </summary>
+        /// <returns>当前消息类型</returns>
+        public MessageType GetCurrentMessageType()
+        {
+            return _m_currentMessageType;
+        }
+        
+        /// <summary>
+        /// 获取当前消息内容
+        /// </summary>
+        /// <returns>当前消息内容</returns>
+        public string GetCurrentMessage()
+        {
+            return _m_messageText?.text ?? "";
+        }
+        
+        /// <summary>
+        /// 设置消息颜色配置
+        /// </summary>
+        /// <param name="_infoColor">信息颜色</param>
+        /// <param name="_successColor">成功颜色</param>
+        /// <param name="_warningColor">警告颜色</param>
+        /// <param name="_errorColor">错误颜色</param>
+        public void SetMessageColors(Color _infoColor, Color _successColor, Color _warningColor, Color _errorColor)
+        {
+            _m_infoColor = _infoColor;
+            _m_successColor = _successColor;
+            _m_warningColor = _warningColor;
+            _m_errorColor = _errorColor;
         }
         
         #endregion

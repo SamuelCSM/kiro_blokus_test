@@ -15,9 +15,15 @@ namespace BlokusGame.Core.Data
         
         /// <summary>游戏时长（秒）</summary>
         public float gameDuration = 0f;
-        
-        /// <summary>游戏开始时间</summary>
-        public System.DateTime gameStartTime;
+
+        /// <summary>玩家分数字典，键为玩家ID，值为分数</summary>
+        public System.Collections.Generic.Dictionary<int, int> playerScores;
+
+        /// <summary>玩家排名字典，键为玩家ID，值为排名</summary>
+        public System.Collections.Generic.Dictionary<int, int> playerRankings;
+
+		/// <summary>游戏开始时间</summary>
+		public System.DateTime gameStartTime;
         
         /// <summary>游戏结束时间</summary>
         public System.DateTime gameEndTime;
@@ -36,7 +42,9 @@ namespace BlokusGame.Core.Data
         /// </summary>
         public GameResults()
         {
-            gameStartTime = System.DateTime.Now;
+	        playerScores = new System.Collections.Generic.Dictionary<int, int>();
+	        playerRankings = new System.Collections.Generic.Dictionary<int, int>();
+			gameStartTime = System.DateTime.Now;
             gameEndTime = System.DateTime.Now;
         }
         

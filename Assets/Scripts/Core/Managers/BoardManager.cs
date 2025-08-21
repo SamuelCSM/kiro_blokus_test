@@ -13,6 +13,9 @@ namespace BlokusGame.Core.Managers
     /// </summary>
     public class BoardManager : MonoBehaviour, _IGameBoard
     {
+        /// <summary>单例实例</summary>
+        public static BoardManager instance { get; private set; }
+    
         [Header("棋盘控制器配置")]
         /// <summary>棋盘控制器实例</summary>
         [SerializeField] private BoardController _m_boardController;
@@ -32,6 +35,18 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         private void Awake()
         {
+            // 单例模式实现
+            if (instance == null)
+            {
+                instance = this;
+                DontDestroyOnLoad(gameObject);
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+            
             // 获取或创建棋盘控制器
             if (_m_boardController == null)
             {

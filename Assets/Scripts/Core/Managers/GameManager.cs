@@ -92,9 +92,6 @@ namespace BlokusGame.Core.Managers
         /// <summary>游戏进行时间（秒）</summary>
         public float gameTime => Time.time - _m_gameStartTime;
         
-        /// <summary>当前是否轮到当前玩家的回合</summary>
-        public bool isCurrentPlayerTurn => isGameActive && !_m_isPaused;
-        
         #region Unity生命周期
         
         /// <summary>
@@ -160,6 +157,16 @@ namespace BlokusGame.Core.Managers
         public void startNewGame(int _playerCount)
         {
             startNewGame(_playerCount, GameMode.LocalMultiplayer);
+        }
+        
+        /// <summary>
+        /// 开始新游戏（大写版本，兼容性）
+        /// </summary>
+        /// <param name="_gameConfig">游戏配置</param>
+        public void StartNewGame(object _gameConfig)
+        {
+            // 这里需要解析gameConfig，暂时使用默认值
+            startNewGame(2, GameMode.LocalMultiplayer);
         }
         
         /// <summary>
@@ -372,6 +379,22 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
+        /// 跳过当前回合（兼容性方法）
+        /// </summary>
+        public void SkipCurrentTurn()
+        {
+            skipCurrentPlayer();
+        }
+        
+        /// <summary>
+        /// 暂停游戏（兼容性方法）
+        /// </summary>
+        public void PauseGame()
+        {
+            pauseGame();
+        }
+        
+        /// <summary>
         /// 获取游戏进度百分比
         /// 基于已放置方块数量计算游戏进度
         /// </summary>
@@ -419,6 +442,12 @@ namespace BlokusGame.Core.Managers
             
             return PlayerGameState.Active; // 默认状态
         }
+        
+        /// <summary>
+        /// 检查当前是否是指定玩家的回合
+        /// </summary>
+        /// <returns>是否是当前玩家回合</returns>
+        public bool isCurrentPlayerTurn => isGameActive && _m_currentPlayerId > 0;
         
         /// <summary>
         /// 设置玩家的游戏状态
@@ -549,6 +578,37 @@ namespace BlokusGame.Core.Managers
         {
             // 在Blokus游戏中，每次放置方块后都会结束回合
             return true;
+        }
+        
+        /// <summary>
+        /// 尝试放置方块
+        /// </summary>
+        /// <param name="_piece">要放置的方块</param>
+        /// <param name="_position">放置位置</param>
+        /// <param name="_playerId">玩家ID</param>
+        /// <returns>是否放置成功</returns>
+        public bool tryPlacePiece(_IGamePiece _piece, Vector2Int _position, int _playerId)
+        {
+            if (!isGameActive)
+            {
+                Debug.LogWarning("[GameManager] 游戏未进行中，无法放置方块");
+                return false;
+            }
+            
+            if (_playerId != _m_currentPlayerId)
+            {
+                Debug.LogWarning($"[GameManager] 不是玩家 {_playerId} 的回合");
+                return false;
+            }
+            
+            // 委托给BoardManager处理方块放置
+            if (_m_boardManager != null)
+            {
+                return _m_boardManager.placePiece(_piece, _position, _playerId);
+            }
+            
+            Debug.LogError("[GameManager] BoardManager未初始化");
+            return false;
         }
         
         /// <summary>

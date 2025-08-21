@@ -14,7 +14,7 @@ namespace BlokusGame.Editor
         /// <summary>
         /// 验证TouchInputManager编译
         /// </summary>
-        [MenuItem("Blokus/验证/TouchInputManager编译验证")]
+        [MenuItem("Blokus/验证/TouchInputManager编译验证Ex")]
         public static void verifyTouchInputManagerCompilation()
         {
             Debug.Log("=== TouchInputManager编译验证开始 ===");

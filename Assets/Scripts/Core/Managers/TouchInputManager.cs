@@ -374,6 +374,41 @@ namespace BlokusGame.Core.Managers
             return _m_selectedPiece;
         }
         
+        /// <summary>
+        /// 设置触摸灵敏度
+        /// </summary>
+        /// <param name="_sensitivity">触摸灵敏度值</param>
+        public void SetTouchSensitivity(float _sensitivity)
+        {
+            // 调整拖拽阈值和触摸半径
+            _m_dragThreshold = Mathf.Lerp(10f, 40f, 1f / _sensitivity);
+            _m_touchRadius = Mathf.Lerp(30f, 80f, _sensitivity);
+            
+            Debug.Log($"[TouchInputManager] 触摸灵敏度设置为: {_sensitivity:F1}");
+        }
+        
+        /// <summary>
+        /// 设置双击间隔时间
+        /// </summary>
+        /// <param name="_interval">双击间隔时间（秒）</param>
+        public void SetDoubleTapInterval(float _interval)
+        {
+            _m_doubleTapInterval = Mathf.Clamp(_interval, 0.1f, 1f);
+            
+            Debug.Log($"[TouchInputManager] 双击间隔设置为: {_m_doubleTapInterval:F2}s");
+        }
+        
+        /// <summary>
+        /// 设置触觉反馈开关
+        /// </summary>
+        /// <param name="_enabled">是否启用触觉反馈</param>
+        public void SetHapticFeedbackEnabled(bool _enabled)
+        {
+            _m_enableHapticFeedback = _enabled;
+            
+            Debug.Log($"[TouchInputManager] 触觉反馈设置为: {_enabled}");
+        }
+        
         #endregion
         
         #region 私有方法 - 初始化和清理

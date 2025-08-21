@@ -43,6 +43,15 @@ namespace BlokusGame.Core.UI
         /// <summary>旋转动画协程</summary>
         private Coroutine _m_spinnerCoroutine;
         
+        /// <summary>加载步骤列表</summary>
+        private System.Collections.Generic.List<string> _m_loadingSteps = new System.Collections.Generic.List<string>();
+        
+        /// <summary>当前步骤索引</summary>
+        private int _m_currentStepIndex = 0;
+        
+        /// <summary>步骤切换协程</summary>
+        private Coroutine _m_stepSwitchCoroutine;
+        
         #region UIBase实现
         
         /// <summary>
@@ -67,6 +76,7 @@ namespace BlokusGame.Core.UI
         protected override void OnUIHidden()
         {
             _stopSpinnerAnimation();
+            _stopStepSwitching();
         }
         
         #endregion
@@ -340,6 +350,141 @@ namespace BlokusGame.Core.UI
         {
             yield return new WaitForSeconds(_delay);
             HideLoading();
+        }
+        
+        /// <summary>
+        /// 设置加载步骤
+        /// </summary>
+        /// <param name="_steps">加载步骤列表</param>
+        /// <param name="_stepDuration">每个步骤的显示时长</param>
+        public void SetLoadingSteps(System.Collections.Generic.List<string> _steps, float _stepDuration = 2f)
+        {
+            _m_loadingSteps = new System.Collections.Generic.List<string>(_steps);
+            _m_currentStepIndex = 0;
+            
+            if (_m_loadingSteps.Count > 0)
+            {
+                _startStepSwitching(_stepDuration);
+            }
+        }
+        
+        /// <summary>
+        /// 设置加载步骤（数组版本）
+        /// </summary>
+        /// <param name="_steps">加载步骤数组</param>
+        /// <param name="_stepDuration">每个步骤的显示时长</param>
+        public void SetLoadingSteps(string[] _steps, float _stepDuration = 2f)
+        {
+            SetLoadingSteps(new System.Collections.Generic.List<string>(_steps), _stepDuration);
+        }
+        
+        /// <summary>
+        /// 跳转到下一个加载步骤
+        /// </summary>
+        public void NextLoadingStep()
+        {
+            if (_m_loadingSteps.Count > 0 && _m_currentStepIndex < _m_loadingSteps.Count - 1)
+            {
+                _m_currentStepIndex++;
+                SetLoadingText(_m_loadingSteps[_m_currentStepIndex]);
+                
+                // 更新进度（基于步骤）
+                if (_m_showProgressBar)
+                {
+                    float stepProgress = (float)(_m_currentStepIndex + 1) / _m_loadingSteps.Count;
+                    UpdateProgress(stepProgress);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 跳转到指定的加载步骤
+        /// </summary>
+        /// <param name="_stepIndex">步骤索引</param>
+        public void GoToLoadingStep(int _stepIndex)
+        {
+            if (_m_loadingSteps.Count > 0 && _stepIndex >= 0 && _stepIndex < _m_loadingSteps.Count)
+            {
+                _m_currentStepIndex = _stepIndex;
+                SetLoadingText(_m_loadingSteps[_m_currentStepIndex]);
+                
+                // 更新进度（基于步骤）
+                if (_m_showProgressBar)
+                {
+                    float stepProgress = (float)(_m_currentStepIndex + 1) / _m_loadingSteps.Count;
+                    UpdateProgress(stepProgress);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 开始步骤自动切换
+        /// </summary>
+        /// <param name="_stepDuration">每个步骤的显示时长</param>
+        private void _startStepSwitching(float _stepDuration)
+        {
+            _stopStepSwitching();
+            _m_stepSwitchCoroutine = StartCoroutine(_stepSwitchCoroutine(_stepDuration));
+        }
+        
+        /// <summary>
+        /// 停止步骤自动切换
+        /// </summary>
+        private void _stopStepSwitching()
+        {
+            if (_m_stepSwitchCoroutine != null)
+            {
+                StopCoroutine(_m_stepSwitchCoroutine);
+                _m_stepSwitchCoroutine = null;
+            }
+        }
+        
+        /// <summary>
+        /// 步骤切换协程
+        /// </summary>
+        /// <param name="_stepDuration">每个步骤的显示时长</param>
+        /// <returns>协程枚举器</returns>
+        private IEnumerator _stepSwitchCoroutine(float _stepDuration)
+        {
+            while (_m_currentStepIndex < _m_loadingSteps.Count)
+            {
+                SetLoadingText(_m_loadingSteps[_m_currentStepIndex]);
+                
+                // 更新进度（基于步骤）
+                if (_m_showProgressBar)
+                {
+                    float stepProgress = (float)(_m_currentStepIndex + 1) / _m_loadingSteps.Count;
+                    UpdateProgress(stepProgress);
+                }
+                
+                yield return new WaitForSeconds(_stepDuration);
+                _m_currentStepIndex++;
+            }
+            
+            _m_stepSwitchCoroutine = null;
+        }
+        
+        /// <summary>
+        /// 获取当前步骤信息
+        /// </summary>
+        /// <returns>当前步骤信息</returns>
+        public string GetCurrentStepInfo()
+        {
+            if (_m_loadingSteps.Count > 0 && _m_currentStepIndex < _m_loadingSteps.Count)
+            {
+                return $"步骤 {_m_currentStepIndex + 1}/{_m_loadingSteps.Count}: {_m_loadingSteps[_m_currentStepIndex]}";
+            }
+            return "";
+        }
+        
+        /// <summary>
+        /// 清除加载步骤
+        /// </summary>
+        public void ClearLoadingSteps()
+        {
+            _stopStepSwitching();
+            _m_loadingSteps.Clear();
+            _m_currentStepIndex = 0;
         }
         
         #endregion

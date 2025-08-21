@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using BlokusGame.Core.Audio;
 using BlokusGame.Core.Managers;
 using BlokusGame.Core.Data;
 using BlokusGame.Core.Events;
@@ -329,7 +330,7 @@ namespace BlokusGame.Core.UI
         /// </summary>
         private void _loadCurrentSettings()
         {
-            _m_currentSettings = _getDefaultSettings();
+            _m_currentSettings = _loadSettings();
             _applySettingsToUI();
             
             if (_m_enableDetailedLogging)
@@ -914,9 +915,20 @@ namespace BlokusGame.Core.UI
             // 应用主音量
             AudioListener.volume = _m_currentSettings.isMuted ? 0f : _m_currentSettings.masterVolume;
             
+            // 通过AudioManager应用音效和音乐音量
+            var audioManager = FindObjectOfType<AudioManager>();
+            if (audioManager != null)
+            {
+                audioManager.setMasterVolume(_m_currentSettings.masterVolume);
+                audioManager.setSoundEffectVolume(_m_currentSettings.sfxVolume);
+                audioManager.setBackgroundMusicVolume(_m_currentSettings.musicVolume);
+                audioManager.setSoundEffectsEnabled(!_m_currentSettings.isMuted);
+                audioManager.setBackgroundMusicEnabled(!_m_currentSettings.isMuted);
+            }
+            
             if (_m_enableDetailedLogging)
             {
-                Debug.Log("[SettingsUI] 应用音频设置");
+                Debug.Log($"[SettingsUI] 应用音频设置 - 主音量: {_m_currentSettings.masterVolume:F2}, 静音: {_m_currentSettings.isMuted}");
             }
         }
         
@@ -927,14 +939,21 @@ namespace BlokusGame.Core.UI
         {
             if (_m_currentSettings == null) return;
             
-            QualitySettings.SetQualityLevel(_m_currentSettings.qualityLevel);
+            // 应用画质等级
+            QualitySettings.SetQualityLevel(_m_currentSettings.qualityLevel, true);
+            
+            // 应用分辨率和全屏设置
             Screen.SetResolution(_m_currentSettings.screenWidth, _m_currentSettings.screenHeight, _m_currentSettings.isFullscreen);
+            
+            // 应用垂直同步
             QualitySettings.vSyncCount = _m_currentSettings.enableVSync ? 1 : 0;
+            
+            // 应用目标帧率
             Application.targetFrameRate = _m_currentSettings.targetFrameRate;
             
             if (_m_enableDetailedLogging)
             {
-                Debug.Log("[SettingsUI] 应用画质设置");
+                Debug.Log($"[SettingsUI] 应用画质设置 - 等级: {_m_currentSettings.qualityLevel}, 分辨率: {_m_currentSettings.screenWidth}x{_m_currentSettings.screenHeight}");
             }
         }
         
@@ -945,11 +964,21 @@ namespace BlokusGame.Core.UI
         {
             if (_m_currentSettings == null) return;
             
-            // TODO: 应用到相应的管理器
+            // 应用语言设置
+            // TODO: 实现本地化系统集成
+            
+            // 应用触觉反馈设置
+            if (_m_currentSettings.enableHapticFeedback)
+            {
+                // TODO: 启用触觉反馈
+            }
+            
+            // 通过事件系统通知其他组件设置变更
+            GameEvents.instance.onSettingsChanged?.Invoke(_m_currentSettings);
             
             if (_m_enableDetailedLogging)
             {
-                Debug.Log("[SettingsUI] 应用游戏玩法设置");
+                Debug.Log($"[SettingsUI] 应用游戏设置 - 语言: {_m_currentSettings.languageIndex}, 触觉反馈: {_m_currentSettings.enableHapticFeedback}");
             }
         }
         
@@ -960,16 +989,22 @@ namespace BlokusGame.Core.UI
         {
             if (_m_currentSettings == null) return;
             
-            // TODO: 应用到TouchInputManager
+            // 通过TouchInputManager应用触摸设置
+            var touchInputManager = FindObjectOfType<TouchInputManager>();
+            if (touchInputManager != null)
+            {
+                touchInputManager.SetTouchSensitivity(_m_currentSettings.touchSensitivity);
+                touchInputManager.SetDoubleTapInterval(_m_currentSettings.doubleTapInterval);
+            }
             
             if (_m_enableDetailedLogging)
             {
-                Debug.Log("[SettingsUI] 应用控制设置");
+                Debug.Log($"[SettingsUI] 应用控制设置 - 触摸灵敏度: {_m_currentSettings.touchSensitivity:F1}, 双击间隔: {_m_currentSettings.doubleTapInterval:F2}s");
             }
         }
         
         /// <summary>
-        /// 保存设置到本地
+        /// 保存设置到持久化存储
         /// </summary>
         private void _saveSettings()
         {
@@ -977,19 +1012,52 @@ namespace BlokusGame.Core.UI
             
             try
             {
+                // 验证设置有效性
+                _m_currentSettings.ClampValues();
+                
+                // 保存到PlayerPrefs
                 string settingsJson = _m_currentSettings.ToJson();
                 PlayerPrefs.SetString("GameSettings", settingsJson);
                 PlayerPrefs.Save();
                 
                 if (_m_enableDetailedLogging)
                 {
-                    Debug.Log("[SettingsUI] 设置已保存到本地");
+                    Debug.Log("[SettingsUI] 设置已保存到持久化存储");
                 }
             }
             catch (System.Exception ex)
             {
                 Debug.LogError($"[SettingsUI] 保存设置失败: {ex.Message}");
             }
+        }
+        
+        /// <summary>
+        /// 从持久化存储加载设置
+        /// </summary>
+        private GameSettings _loadSettings()
+        {
+            try
+            {
+                if (PlayerPrefs.HasKey("GameSettings"))
+                {
+                    string settingsJson = PlayerPrefs.GetString("GameSettings");
+                    var loadedSettings = GameSettings.FromJson(settingsJson);
+                    
+                    if (_m_enableDetailedLogging)
+                    {
+                        Debug.Log("[SettingsUI] 从持久化存储加载设置");
+                    }
+                    
+                    return loadedSettings;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[SettingsUI] 加载设置失败: {ex.Message}");
+            }
+            
+            // 返回默认设置
+            return _getDefaultSettings();
         }
         
         #endregion

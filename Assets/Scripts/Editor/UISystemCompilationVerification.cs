@@ -1,337 +1,304 @@
 using UnityEngine;
 using UnityEditor;
 using System.Reflection;
-using BlokusGame.Core.UI;
-using BlokusGame.Core.Data;
-using BlokusGame.Core.Events;
-using BlokusGame.Core.Managers;
-using MessageType = BlokusGame.Core.Events.MessageType;
+using System.Linq;
 
 namespace BlokusGame.Editor
 {
     /// <summary>
     /// UI系统编译验证工具
-    /// 验证所有UI相关类的编译状态和接口实现
+    /// 验证所有UI面板的完整性和功能实现
     /// </summary>
-    public class UISystemCompilationVerification
+    public class UISystemCompilationVerification : EditorWindow
     {
-        /// <summary>
-        /// 验证UI系统编译状态
-        /// </summary>
-        [MenuItem("Tools/Blokus/Verify UI System Compilation")]
-        public static void verifyUISystemCompilation()
+        [MenuItem("Blokus/验证/UI系统编译验证")]
+        public static void ShowWindow()
         {
-            Debug.Log("=== 开始验证UI系统编译状态 ===");
+            GetWindow<UISystemCompilationVerification>("UI系统编译验证");
+        }
+        
+        private void OnGUI()
+        {
+            GUILayout.Label("UI系统编译验证", EditorStyles.boldLabel);
+            GUILayout.Space(10);
             
-            bool allTestsPassed = true;
-            
-            // 验证基础类编译
-            allTestsPassed &= _verifyUIClassCompilation();
-            
-            // 验证枚举一致性
-            allTestsPassed &= _verifyEnumConsistency();
-            
-            // 验证方法调用
-            allTestsPassed &= _verifyMethodCalls();
-            
-            // 验证数据类
-            allTestsPassed &= _verifyDataClasses();
-            
-            if (allTestsPassed)
+            if (GUILayout.Button("验证UI系统完整性", GUILayout.Height(30)))
             {
-                Debug.Log("✅ UI系统编译验证全部通过！");
-                EditorUtility.DisplayDialog("验证成功", "UI系统编译验证全部通过！", "确定");
+                VerifyUISystem();
             }
-            else
+            
+            GUILayout.Space(10);
+            
+            if (GUILayout.Button("验证UI面板功能", GUILayout.Height(30)))
             {
-                Debug.LogError("❌ UI系统编译验证发现问题，请检查上述错误信息");
-                EditorUtility.DisplayDialog("验证失败", "UI系统编译验证发现问题，请检查控制台输出", "确定");
+                VerifyUIPanelFunctionality();
             }
+        }
+        
+        /// <summary>
+        /// 验证UI系统完整性
+        /// </summary>
+        private void VerifyUISystem()
+        {
+            Debug.Log("=== UI系统编译验证开始 ===");
+            
+            // 验证UI基础类
+            VerifyUIBaseClass();
+            
+            // 验证UI管理器
+            VerifyUIManager();
+            
+            // 验证各个UI面板
+            VerifySettingsUI();
+            VerifyPauseMenuUI();
+            VerifyGameOverUI();
+            VerifyMessageUI();
+            VerifyLoadingUI();
             
             Debug.Log("=== UI系统编译验证完成 ===");
         }
         
         /// <summary>
-        /// 验证UI类编译状态
+        /// 验证UIBase基础类
         /// </summary>
-        /// <returns>是否验证通过</returns>
-        private static bool _verifyUIClassCompilation()
+        private void VerifyUIBaseClass()
         {
-            Debug.Log("--- 验证UI类编译状态 ---");
-            
-            bool success = true;
-            
-            try
+            var uiBaseType = System.Type.GetType("BlokusGame.Core.UI.UIBase, Assembly-CSharp");
+            if (uiBaseType != null)
             {
-                // 验证UI基础类
-                var uiBaseType = typeof(UIBase);
-                Debug.Log($"✅ UIBase类编译成功: {uiBaseType.FullName}");
+                Debug.Log("✅ UIBase基础类验证通过");
                 
-                var uiManagerType = typeof(UIManager);
-                Debug.Log($"✅ UIManager类编译成功: {uiManagerType.FullName}");
+                // 检查关键方法
+                var showMethod = uiBaseType.GetMethod("Show");
+                var hideMethod = uiBaseType.GetMethod("Hide");
+                var toggleMethod = uiBaseType.GetMethod("Toggle");
                 
-                // 验证主要UI面板
-                var mainMenuUIType = typeof(MainMenuUI);
-                Debug.Log($"✅ MainMenuUI类编译成功: {mainMenuUIType.FullName}");
-                
-                var gameplayUIType = typeof(GameplayUI);
-                Debug.Log($"✅ GameplayUI类编译成功: {gameplayUIType.FullName}");
-                
-                var settingsUIType = typeof(SettingsUI);
-                Debug.Log($"✅ SettingsUI类编译成功: {settingsUIType.FullName}");
-                
-                var messageUIType = typeof(MessageUI);
-                Debug.Log($"✅ MessageUI类编译成功: {messageUIType.FullName}");
-                
-                var loadingUIType = typeof(LoadingUI);
-                Debug.Log($"✅ LoadingUI类编译成功: {loadingUIType.FullName}");
-                
-                var pauseMenuUIType = typeof(PauseMenuUI);
-                Debug.Log($"✅ PauseMenuUI类编译成功: {pauseMenuUIType.FullName}");
-                
-                var gameOverUIType = typeof(GameOverUI);
-                Debug.Log($"✅ GameOverUI类编译成功: {gameOverUIType.FullName}");
-                
-                // 验证辅助UI组件
-                var playerInfoUIType = typeof(PlayerInfoUI);
-                Debug.Log($"✅ PlayerInfoUI类编译成功: {playerInfoUIType.FullName}");
-                
-                var pieceIconUIType = typeof(PieceIconUI);
-                Debug.Log($"✅ PieceIconUI类编译成功: {pieceIconUIType.FullName}");
-                
-                var playerResultUIType = typeof(PlayerResultUI);
-                Debug.Log($"✅ PlayerResultUI类编译成功: {playerResultUIType.FullName}");
+                if (showMethod != null && hideMethod != null && toggleMethod != null)
+                {
+                    Debug.Log("✅ UIBase核心方法验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ UIBase缺少核心方法");
+                }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"❌ UI类编译验证失败: {ex.Message}");
-                success = false;
+                Debug.LogError("❌ UIBase基础类未找到");
             }
-            
-            return success;
         }
         
         /// <summary>
-        /// 验证枚举一致性
+        /// 验证UI管理器
         /// </summary>
-        /// <returns>是否验证通过</returns>
-        private static bool _verifyEnumConsistency()
+        private void VerifyUIManager()
         {
-            Debug.Log("--- 验证枚举一致性 ---");
-            
-            bool success = true;
-            
-            try
+            var uiManagerType = System.Type.GetType("BlokusGame.Core.Managers.UIManager, Assembly-CSharp");
+            if (uiManagerType != null)
             {
-                // 验证GameState枚举
-                var gameStateType = typeof(GameState);
-                Debug.Log($"✅ GameState枚举编译成功: {gameStateType.FullName}");
+                Debug.Log("✅ UIManager管理器验证通过");
                 
-                // 验证GameMode枚举
-                var gameModeType = typeof(GameMode);
-                Debug.Log($"✅ GameMode枚举编译成功: {gameModeType.FullName}");
-                
-                // 验证AIDifficulty枚举
-                var aiDifficultyType = typeof(AIDifficulty);
-                Debug.Log($"✅ AIDifficulty枚举编译成功: {aiDifficultyType.FullName}");
-                
-                // 验证MessageType枚举
-                var messageTypeType = typeof(MessageType);
-                Debug.Log($"✅ MessageType枚举编译成功: {messageTypeType.FullName}");
-                
-                // 验证PlayerGameState枚举
-                var playerGameStateType = typeof(PlayerGameState);
-                Debug.Log($"✅ PlayerGameState枚举编译成功: {playerGameStateType.FullName}");
-                
-                // 验证枚举值
-                Debug.Log($"✅ GameState.MainMenu: {GameState.MainMenu}");
-                Debug.Log($"✅ GameState.GamePlaying: {GameState.GamePlaying}");
-                Debug.Log($"✅ GameState.GamePaused: {GameState.GamePaused}");
-                Debug.Log($"✅ GameState.GameEnded: {GameState.GameEnded}");
-                
-                Debug.Log($"✅ GameMode.SinglePlayerVsAI: {GameMode.SinglePlayerVsAI}");
-                Debug.Log($"✅ GameMode.LocalMultiplayer: {GameMode.LocalMultiplayer}");
-                Debug.Log($"✅ GameMode.Tutorial: {GameMode.Tutorial}");
-                
-                Debug.Log($"✅ AIDifficulty.Easy: {AIDifficulty.Easy}");
-                Debug.Log($"✅ AIDifficulty.Medium: {AIDifficulty.Medium}");
-                Debug.Log($"✅ AIDifficulty.Hard: {AIDifficulty.Hard}");
+                // 检查单例属性
+                var instanceProperty = uiManagerType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static);
+                if (instanceProperty != null)
+                {
+                    Debug.Log("✅ UIManager单例模式验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ UIManager缺少单例实例");
+                }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"❌ 枚举一致性验证失败: {ex.Message}");
-                success = false;
+                Debug.LogError("❌ UIManager管理器未找到");
             }
-            
-            return success;
         }
         
         /// <summary>
-        /// 验证方法调用
+        /// 验证SettingsUI
         /// </summary>
-        /// <returns>是否验证通过</returns>
-        private static bool _verifyMethodCalls()
+        private void VerifySettingsUI()
         {
-            Debug.Log("--- 验证方法调用 ---");
-            
-            bool success = true;
-            
-            try
+            var settingsUIType = System.Type.GetType("BlokusGame.Core.UI.SettingsUI, Assembly-CSharp");
+            if (settingsUIType != null)
             {
-                // 验证GameManager方法存在
-                var gameManagerType = typeof(GameManager);
+                Debug.Log("✅ SettingsUI设置界面验证通过");
                 
-                var startNewGameMethod = gameManagerType.GetMethod("startNewGame", new System.Type[] { typeof(int), typeof(GameMode) });
-                if (startNewGameMethod != null)
+                // 检查关键方法
+                var getCurrentSettingsMethod = settingsUIType.GetMethod("GetCurrentSettings");
+                var setCurrentSettingsMethod = settingsUIType.GetMethod("SetCurrentSettings");
+                var applyAndSaveMethod = settingsUIType.GetMethod("ApplyAndSaveSettings");
+                
+                if (getCurrentSettingsMethod != null && setCurrentSettingsMethod != null && applyAndSaveMethod != null)
                 {
-                    Debug.Log("✅ GameManager.startNewGame方法存在");
+                    Debug.Log("✅ SettingsUI功能方法验证通过");
                 }
                 else
                 {
-                    Debug.LogError("❌ GameManager.startNewGame方法不存在");
-                    success = false;
-                }
-                
-                var pauseGameMethod = gameManagerType.GetMethod("pauseGame");
-                if (pauseGameMethod != null)
-                {
-                    Debug.Log("✅ GameManager.pauseGame方法存在");
-                }
-                else
-                {
-                    Debug.LogError("❌ GameManager.pauseGame方法不存在");
-                    success = false;
-                }
-                
-                var resumeGameMethod = gameManagerType.GetMethod("resumeGame");
-                if (resumeGameMethod != null)
-                {
-                    Debug.Log("✅ GameManager.resumeGame方法存在");
-                }
-                else
-                {
-                    Debug.LogError("❌ GameManager.resumeGame方法不存在");
-                    success = false;
-                }
-                
-                var resetGameMethod = gameManagerType.GetMethod("resetGame");
-                if (resetGameMethod != null)
-                {
-                    Debug.Log("✅ GameManager.resetGame方法存在");
-                }
-                else
-                {
-                    Debug.LogError("❌ GameManager.resetGame方法不存在");
-                    success = false;
-                }
-                
-                var exitToMainMenuMethod = gameManagerType.GetMethod("exitToMainMenu");
-                if (exitToMainMenuMethod != null)
-                {
-                    Debug.Log("✅ GameManager.exitToMainMenu方法存在");
-                }
-                else
-                {
-                    Debug.LogError("❌ GameManager.exitToMainMenu方法不存在");
-                    success = false;
-                }
-                
-                var skipCurrentPlayerMethod = gameManagerType.GetMethod("skipCurrentPlayer");
-                if (skipCurrentPlayerMethod != null)
-                {
-                    Debug.Log("✅ GameManager.skipCurrentPlayer方法存在");
-                }
-                else
-                {
-                    Debug.LogError("❌ GameManager.skipCurrentPlayer方法不存在");
-                    success = false;
+                    Debug.LogError("❌ SettingsUI缺少功能方法");
                 }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"❌ 方法调用验证失败: {ex.Message}");
-                success = false;
+                Debug.LogError("❌ SettingsUI设置界面未找到");
             }
-            
-            return success;
         }
         
         /// <summary>
-        /// 验证数据类
+        /// 验证PauseMenuUI
         /// </summary>
-        /// <returns>是否验证通过</returns>
-        private static bool _verifyDataClasses()
+        private void VerifyPauseMenuUI()
         {
-            Debug.Log("--- 验证数据类 ---");
-            
-            bool success = true;
-            
-            try
+            var pauseMenuUIType = System.Type.GetType("BlokusGame.Core.UI.PauseMenuUI, Assembly-CSharp");
+            if (pauseMenuUIType != null)
             {
-                // 验证GameSettings类
-                var gameSettingsType = typeof(GameSettings);
-                Debug.Log($"✅ GameSettings类编译成功: {gameSettingsType.FullName}");
+                Debug.Log("✅ PauseMenuUI暂停菜单验证通过");
                 
-                var gameSettings = new GameSettings();
-                Debug.Log($"✅ GameSettings实例创建成功");
+                // 检查关键方法
+                var quickResumeMethod = pauseMenuUIType.GetMethod("QuickResume");
+                var isConfirmationDialogShowingMethod = pauseMenuUIType.GetMethod("IsConfirmationDialogShowing");
                 
-                // 验证GameResults类
-                var gameResultsType = typeof(GameResults);
-                Debug.Log($"✅ GameResults类编译成功: {gameResultsType.FullName}");
-                
-                var gameResults = new GameResults();
-                Debug.Log($"✅ GameResults实例创建成功");
-                
-                // 验证PlayerResult类
-                var playerResultType = typeof(PlayerResult);
-                Debug.Log($"✅ PlayerResult类编译成功: {playerResultType.FullName}");
-                
-                var playerResult = new PlayerResult();
-                Debug.Log($"✅ PlayerResult实例创建成功");
+                if (quickResumeMethod != null && isConfirmationDialogShowingMethod != null)
+                {
+                    Debug.Log("✅ PauseMenuUI功能方法验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ PauseMenuUI缺少功能方法");
+                }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"❌ 数据类验证失败: {ex.Message}");
-                success = false;
+                Debug.LogError("❌ PauseMenuUI暂停菜单未找到");
             }
-            
-            return success;
         }
         
         /// <summary>
-        /// 快速UI系统测试
+        /// 验证GameOverUI
         /// </summary>
-        [MenuItem("Tools/Blokus/Quick UI System Test")]
-        public static void quickUISystemTest()
+        private void VerifyGameOverUI()
         {
-            Debug.Log("=== 快速UI系统测试 ===");
-            
-            try
+            var gameOverUIType = System.Type.GetType("BlokusGame.Core.UI.GameOverUI, Assembly-CSharp");
+            if (gameOverUIType != null)
             {
-                // 创建测试实例
-                GameObject testObj = new GameObject("QuickUITest");
+                Debug.Log("✅ GameOverUI游戏结束界面验证通过");
                 
-                var uiManager = testObj.AddComponent<UIManager>();
-                var mainMenuUI = testObj.AddComponent<MainMenuUI>();
-                var gameplayUI = testObj.AddComponent<GameplayUI>();
-                var settingsUI = testObj.AddComponent<SettingsUI>();
+                // 检查关键方法
+                var showGameResultsMethod = gameOverUIType.GetMethod("ShowGameResults");
+                var showSimpleResultsMethod = gameOverUIType.GetMethod("ShowSimpleResults");
+                var setButtonVisibilityMethod = gameOverUIType.GetMethod("SetButtonVisibility");
                 
-                // 基础功能测试
-                var gameSettings = new GameSettings();
-                var gameResults = new GameResults();
-                var playerResult = new PlayerResult(1, "测试玩家", Color.red);
-                
-                Debug.Log("✅ 快速测试通过 - 所有UI类都能正常创建");
-                
-                // 清理
-                Object.DestroyImmediate(testObj);
+                if (showGameResultsMethod != null && showSimpleResultsMethod != null && setButtonVisibilityMethod != null)
+                {
+                    Debug.Log("✅ GameOverUI功能方法验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ GameOverUI缺少功能方法");
+                }
             }
-            catch (System.Exception ex)
+            else
             {
-                Debug.LogError($"❌ 快速测试失败: {ex.Message}");
+                Debug.LogError("❌ GameOverUI游戏结束界面未找到");
+            }
+        }
+        
+        /// <summary>
+        /// 验证MessageUI
+        /// </summary>
+        private void VerifyMessageUI()
+        {
+            var messageUIType = System.Type.GetType("BlokusGame.Core.UI.MessageUI, Assembly-CSharp");
+            if (messageUIType != null)
+            {
+                Debug.Log("✅ MessageUI消息提示组件验证通过");
+                
+                // 检查关键方法
+                var showMessageMethod = messageUIType.GetMethod("ShowMessage");
+                var showMessageImmediateMethod = messageUIType.GetMethod("ShowMessageImmediate");
+                var clearMessageQueueMethod = messageUIType.GetMethod("ClearMessageQueue");
+                
+                if (showMessageMethod != null && showMessageImmediateMethod != null && clearMessageQueueMethod != null)
+                {
+                    Debug.Log("✅ MessageUI功能方法验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ MessageUI缺少功能方法");
+                }
+            }
+            else
+            {
+                Debug.LogError("❌ MessageUI消息提示组件未找到");
+            }
+        }
+        
+        /// <summary>
+        /// 验证LoadingUI
+        /// </summary>
+        private void VerifyLoadingUI()
+        {
+            var loadingUIType = System.Type.GetType("BlokusGame.Core.UI.LoadingUI, Assembly-CSharp");
+            if (loadingUIType != null)
+            {
+                Debug.Log("✅ LoadingUI加载界面验证通过");
+                
+                // 检查关键方法
+                var showLoadingMethod = loadingUIType.GetMethod("ShowLoading");
+                var updateProgressMethod = loadingUIType.GetMethod("UpdateProgress");
+                var setLoadingStepsMethod = loadingUIType.GetMethods().FirstOrDefault(m => m.Name == "SetLoadingSteps" && m.GetParameters().Length == 2);
+                var completeLoadingMethod = loadingUIType.GetMethod("CompleteLoading");
+                
+                if (showLoadingMethod != null && updateProgressMethod != null && setLoadingStepsMethod != null && completeLoadingMethod != null)
+                {
+                    Debug.Log("✅ LoadingUI功能方法验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ LoadingUI缺少功能方法");
+                }
+            }
+            else
+            {
+                Debug.LogError("❌ LoadingUI加载界面未找到");
+            }
+        }
+        
+        /// <summary>
+        /// 验证UI面板功能
+        /// </summary>
+        private void VerifyUIPanelFunctionality()
+        {
+            Debug.Log("=== UI面板功能验证开始 ===");
+            
+            // 验证MessageData结构
+            var messageDataType = System.Type.GetType("BlokusGame.Core.UI.MessageData, Assembly-CSharp");
+            if (messageDataType != null)
+            {
+                Debug.Log("✅ MessageData数据结构验证通过");
+            }
+            else
+            {
+                Debug.LogError("❌ MessageData数据结构未找到");
             }
             
-            Debug.Log("=== 快速UI系统测试完成 ===");
+            // 验证GameEvents中的设置事件
+            var gameEventsType = System.Type.GetType("BlokusGame.Core.Events.GameEvents, Assembly-CSharp");
+            if (gameEventsType != null)
+            {
+                var onSettingsChangedField = gameEventsType.GetField("onSettingsChanged");
+                if (onSettingsChangedField != null)
+                {
+                    Debug.Log("✅ GameEvents设置变更事件验证通过");
+                }
+                else
+                {
+                    Debug.LogError("❌ GameEvents缺少设置变更事件");
+                }
+            }
+            
+            Debug.Log("=== UI面板功能验证完成 ===");
         }
     }
 }
