@@ -347,6 +347,49 @@ namespace BlokusGame.Core.InputSystem
             _m_enableAudioFeedback = _enabled;
         }
         
+        /// <summary>
+        /// 显示缩放效果
+        /// </summary>
+        /// <param name="_centerPoint">缩放中心点（屏幕坐标）</param>
+        /// <param name="_scaleFactor">缩放因子</param>
+        public void showScaleEffect(Vector2 _centerPoint, float _scaleFactor)
+        {
+            if (!_m_enableVisualFeedback) return;
+            
+            // 创建缩放效果的视觉反馈
+            Vector3 worldPosition = _screenToWorldPosition(_centerPoint);
+            
+            // 使用涟漪效果来表示缩放
+            GameObject scaleEffect = _getRippleFromPool();
+            
+            if (scaleEffect != null)
+            {
+                scaleEffect.transform.position = worldPosition;
+                
+                // 根据缩放因子调整效果大小和颜色
+                float effectSize = Mathf.Lerp(0.5f, 2f, Mathf.Abs(_scaleFactor - 1f) * 5f);
+                Color effectColor = _scaleFactor > 1f ? Color.green : Color.red;
+                effectColor.a = 0.6f;
+                
+                scaleEffect.transform.localScale = Vector3.one * effectSize;
+                
+                // 设置颜色（如果有渲染器组件）
+                Renderer renderer = scaleEffect.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.material.color = effectColor;
+                }
+                
+                scaleEffect.SetActive(true);
+                _m_activeRipples.Add(scaleEffect);
+                
+                // 启动缩放效果动画
+                StartCoroutine(_animateScaleEffect(scaleEffect, effectSize));
+            }
+            
+            Debug.Log($"[TouchFeedbackSystem] 显示缩放效果，中心点: {_centerPoint}, 缩放因子: {_scaleFactor:F3}");
+        }
+        
         #endregion
         
         #region 私有方法 - 初始化和清理
@@ -618,6 +661,54 @@ namespace BlokusGame.Core.InputSystem
         {
             yield return new WaitForSeconds(_m_trailFadeTime);
             _returnTrailToPool(_trail);
+        }
+        
+        /// <summary>
+        /// 缩放效果动画协程
+        /// </summary>
+        /// <param name="_scaleEffect">缩放效果对象</param>
+        /// <param name="_targetSize">目标大小</param>
+        /// <returns>协程</returns>
+        private IEnumerator _animateScaleEffect(GameObject _scaleEffect, float _targetSize)
+        {
+            float elapsedTime = 0f;
+            Vector3 startScale = Vector3.one * 0.1f;
+            Vector3 targetScale = Vector3.one * _targetSize;
+            
+            // 缩放动画
+            while (elapsedTime < _m_rippleEffectDuration * 0.5f)
+            {
+                float t = elapsedTime / (_m_rippleEffectDuration * 0.5f);
+                _scaleEffect.transform.localScale = Vector3.Lerp(startScale, targetScale, t);
+                
+                elapsedTime += Time.deltaTime;
+                yield return null;
+            }
+            
+            // 保持一段时间
+            yield return new WaitForSeconds(_m_rippleEffectDuration * 0.2f);
+            
+            // 淡出动画
+            elapsedTime = 0f;
+            Renderer renderer = _scaleEffect.GetComponent<Renderer>();
+            Color startColor = renderer != null ? renderer.material.color : Color.white;
+            Color endColor = startColor;
+            endColor.a = 0f;
+            
+            while (elapsedTime < _m_rippleEffectDuration * 0.3f)
+            {
+                float t = elapsedTime / (_m_rippleEffectDuration * 0.3f);
+                
+                if (renderer != null)
+                {
+                    renderer.material.color = Color.Lerp(startColor, endColor, t);
+                }
+                
+                elapsedTime += Time.deltaTime;
+                yield return null;
+            }
+            
+            _returnRippleToPool(_scaleEffect);
         }
         
         /// <summary>

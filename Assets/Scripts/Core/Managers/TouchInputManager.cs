@@ -45,6 +45,15 @@ namespace BlokusGame.Core.Managers
         /// <summary>缩放敏感度</summary>
         [SerializeField] private float _m_pinchSensitivity = 1f;
         
+        /// <summary>最小缩放级别</summary>
+        [SerializeField] private float _m_minZoomLevel = 0.5f;
+        
+        /// <summary>最大缩放级别</summary>
+        [SerializeField] private float _m_maxZoomLevel = 3.0f;
+        
+        /// <summary>缩放平滑度</summary>
+        [SerializeField] private float _m_zoomSmoothness = 0.1f;
+        
         [Header("反馈配置")]
         /// <summary>是否启用触觉反馈</summary>
         [SerializeField] private bool _m_enableHapticFeedback = true;
@@ -116,6 +125,39 @@ namespace BlokusGame.Core.Managers
         /// <summary>上次有效触摸时间</summary>
         private float _m_lastValidTouchTime;
         
+        /// <summary>防误触模式开始时间</summary>
+        private float _m_antiMistouchStartTime;
+        
+        /// <summary>触摸频率统计（用于异常检测）</summary>
+        private Queue<float> _m_touchTimestamps = new Queue<float>();
+        
+        /// <summary>当前手势类型</summary>
+        private TouchState _m_currentGestureType = TouchState.None;
+        
+        /// <summary>手势开始时间</summary>
+        private float _m_gestureStartTime;
+        
+        /// <summary>手掌误触检测数据</summary>
+        private List<Vector2> _m_palmTouchPositions = new List<Vector2>();
+        
+        /// <summary>性能监控计时器</summary>
+        private float _m_performanceMonitorTimer;
+        
+        /// <summary>帧率历史记录</summary>
+        private Queue<float> _m_frameRateHistory = new Queue<float>();
+        
+        /// <summary>当前平均帧率</summary>
+        private float _m_currentAverageFrameRate = 60f;
+        
+        /// <summary>性能级别</summary>
+        private PerformanceLevel _m_currentPerformanceLevel = PerformanceLevel.High;
+        
+        /// <summary>触摸事件批处理队列</summary>
+        private Queue<TouchEventBatch> _m_touchEventBatchQueue = new Queue<TouchEventBatch>();
+        
+        /// <summary>对象池管理器</summary>
+        private Dictionary<System.Type, Queue<object>> _m_objectPools = new Dictionary<System.Type, Queue<object>>();
+        
         /// <summary>旋转手势的最小角度变化</summary>
         [SerializeField] private float _m_rotationThreshold = 5f;
         
@@ -141,6 +183,18 @@ namespace BlokusGame.Core.Managers
         /// <summary>触摸压力阈值（如果设备支持）</summary>
         [SerializeField] private float _m_pressureThreshold = 0.1f;
         
+        /// <summary>手势冲突检测时间窗口</summary>
+        [SerializeField] private float _m_gestureConflictWindow = 0.2f;
+        
+        /// <summary>异常触摸检测阈值（每秒触摸次数）</summary>
+        [SerializeField] private int _m_abnormalTouchThreshold = 20;
+        
+        /// <summary>手掌误触检测面积阈值</summary>
+        [SerializeField] private float _m_palmTouchAreaThreshold = 100f;
+        
+        /// <summary>防误触恢复时间</summary>
+        [SerializeField] private float _m_antiMistouchRecoveryTime = 1f;
+        
         [Header("性能优化配置")]
         /// <summary>触摸事件处理频率限制（每秒最大次数）</summary>
         [SerializeField] private int _m_maxTouchEventsPerSecond = 60;
@@ -148,32 +202,69 @@ namespace BlokusGame.Core.Managers
         /// <summary>是否启用触摸事件缓存</summary>
         [SerializeField] private bool _m_enableTouchEventCaching = true;
         
-        /// <summary>
-        /// 触摸反馈类型枚举
-        /// </summary>
-        private enum TouchFeedbackType
-        {
-            /// <summary>普通点击</summary>
-            Tap,
-            /// <summary>成功操作</summary>
-            Success,
-            /// <summary>错误操作</summary>
-            Error
-        }
+        /// <summary>是否启用自适应性能调整</summary>
+        [SerializeField] private bool _m_enableAdaptivePerformance = true;
         
-        /// <summary>触摸状态枚举</summary>
+        /// <summary>性能监控间隔（秒）</summary>
+        [SerializeField] private float _m_performanceMonitorInterval = 1f;
+        
+        /// <summary>低性能阈值（FPS）</summary>
+        [SerializeField] private float _m_lowPerformanceThreshold = 30f;
+        
+        /// <summary>触摸事件批处理大小</summary>
+        [SerializeField] private int _m_touchEventBatchSize = 5;
+        
+        /// <summary>对象池预分配大小</summary>
+        [SerializeField] private int _m_objectPoolPreallocationSize = 20;
+        
+        // 注意：使用TouchFeedbackSystem.FeedbackType替代本地TouchFeedbackType枚举
+        // 避免重复定义，统一使用TouchFeedbackSystem中的FeedbackType
+        
+        /// <summary>触摸状态和手势类型统一枚举</summary>
         public enum TouchState
         {
             /// <summary>无触摸</summary>
             None,
-            /// <summary>单点触摸</summary>
-            SingleTouch,
+            /// <summary>单点触摸/点击</summary>
+            Tap,
             /// <summary>拖拽中</summary>
             Dragging,
+            /// <summary>长按</summary>
+            LongPress,
+            /// <summary>双击</summary>
+            DoubleTap,
             /// <summary>多点触摸</summary>
             MultiTouch,
             /// <summary>缩放手势</summary>
-            Pinching
+            Pinching,
+            /// <summary>旋转手势</summary>
+            Rotation,
+            /// <summary>平移手势</summary>
+            Pan,
+            /// <summary>边缘滑动</summary>
+            EdgeSwipe
+        }
+        
+        /// <summary>性能级别枚举</summary>
+        public enum PerformanceLevel
+        {
+            /// <summary>低性能</summary>
+            Low,
+            /// <summary>中等性能</summary>
+            Medium,
+            /// <summary>高性能</summary>
+            High
+        }
+        
+        /// <summary>触摸事件批处理结构</summary>
+        private struct TouchEventBatch
+        {
+            /// <summary>批处理中的事件列表</summary>
+            public List<TouchEventData> events;
+            /// <summary>批处理时间戳</summary>
+            public float timestamp;
+            /// <summary>批处理优先级</summary>
+            public int priority;
         }
         
         /// <summary>
@@ -265,6 +356,9 @@ namespace BlokusGame.Core.Managers
             {
                 _m_touchEventCache = new Queue<TouchEventData>();
             }
+            
+            // 初始化对象池
+            _initializeObjectPools();
         }
         
         /// <summary>
@@ -282,10 +376,25 @@ namespace BlokusGame.Core.Managers
         {
             if (!_m_enableTouchInput && !_m_enableMouseInput) return;
             
+            // 性能监控
+            if (_m_enableAdaptivePerformance)
+            {
+                _monitorPerformance();
+            }
+            
             // 重置帧计数器
             _m_currentFrameTouchEvents = 0;
             
-            _handleInput();
+            // 根据性能级别调整处理策略
+            if (_m_currentPerformanceLevel == PerformanceLevel.Low)
+            {
+                _handleInputLowPerformance();
+            }
+            else
+            {
+                _handleInput();
+            }
+            
             _updateTouchState();
             _processAntiMistouch();
             
@@ -294,6 +403,9 @@ namespace BlokusGame.Core.Managers
             {
                 _processCachedTouchEvents();
             }
+            
+            // 处理批处理事件
+            _processBatchedTouchEvents();
         }
         
         /// <summary>
@@ -407,6 +519,110 @@ namespace BlokusGame.Core.Managers
             _m_enableHapticFeedback = _enabled;
             
             Debug.Log($"[TouchInputManager] 触觉反馈设置为: {_enabled}");
+        }
+        
+        /// <summary>
+        /// 获取当前是否在防误触模式
+        /// </summary>
+        /// <returns>是否在防误触模式</returns>
+        public bool isInAntiMistouchMode()
+        {
+            return _m_isInAntiMistouchMode;
+        }
+        
+        /// <summary>
+        /// 设置防误触敏感度
+        /// </summary>
+        /// <param name="_sensitivity">敏感度（0.1-2.0）</param>
+        public void setAntiMistouchSensitivity(float _sensitivity)
+        {
+            _sensitivity = Mathf.Clamp(_sensitivity, 0.1f, 2.0f);
+            
+            // 调整相关参数
+            _m_abnormalTouchThreshold = Mathf.RoundToInt(20 / _sensitivity);
+            _m_palmTouchAreaThreshold = 100f / _sensitivity;
+            _m_gestureConflictWindow = 0.2f / _sensitivity;
+            
+            Debug.Log($"[TouchInputManager] 防误触敏感度设置为: {_sensitivity}");
+        }
+        
+        /// <summary>
+        /// 强制退出防误触模式
+        /// </summary>
+        public void forceExitAntiMistouchMode()
+        {
+            if (_m_isInAntiMistouchMode)
+            {
+                _m_isInAntiMistouchMode = false;
+                resetInput();
+                
+                Debug.Log("[TouchInputManager] 强制退出防误触模式");
+            }
+        }
+        
+        /// <summary>
+        /// 获取当前手势类型
+        /// </summary>
+        /// <returns>当前手势类型</returns>
+        public TouchState getCurrentGestureType()
+        {
+            return _m_currentGestureType;
+        }
+        
+        /// <summary>
+        /// 设置性能级别
+        /// </summary>
+        /// <param name="_level">性能级别</param>
+        public void setPerformanceLevel(PerformanceLevel _level)
+        {
+            _m_currentPerformanceLevel = _level;
+            _applyPerformanceOptimizations();
+            
+            Debug.Log($"[TouchInputManager] 手动设置性能级别为: {_level}");
+        }
+        
+        /// <summary>
+        /// 获取当前性能级别
+        /// </summary>
+        /// <returns>当前性能级别</returns>
+        public PerformanceLevel getCurrentPerformanceLevel()
+        {
+            return _m_currentPerformanceLevel;
+        }
+        
+        /// <summary>
+        /// 设置自适应性能调整开关
+        /// </summary>
+        /// <param name="_enabled">是否启用</param>
+        public void setAdaptivePerformanceEnabled(bool _enabled)
+        {
+            _m_enableAdaptivePerformance = _enabled;
+            
+            Debug.Log($"[TouchInputManager] 自适应性能调整设置为: {_enabled}");
+        }
+        
+        /// <summary>
+        /// 清理对象池
+        /// </summary>
+        public void clearObjectPools()
+        {
+            foreach (var pool in _m_objectPools.Values)
+            {
+                pool.Clear();
+            }
+            
+            Debug.Log("[TouchInputManager] 对象池已清理");
+        }
+        
+        /// <summary>
+        /// 强制垃圾回收（仅在必要时使用）
+        /// </summary>
+        public void forceGarbageCollection()
+        {
+            System.GC.Collect();
+            System.GC.WaitForPendingFinalizers();
+            
+            Debug.Log("[TouchInputManager] 强制垃圾回收完成");
         }
         
         #endregion
@@ -561,7 +777,13 @@ namespace BlokusGame.Core.Managers
                 _handlePanGesture();
             }
             
-            _m_currentTouchState = TouchState.MultiTouch;
+            // 如果状态没有被具体手势更新，则设置为多点触摸
+            if (_m_currentTouchState != TouchState.Pinching && 
+                _m_currentTouchState != TouchState.Rotation && 
+                _m_currentTouchState != TouchState.Pan)
+            {
+                _m_currentTouchState = TouchState.MultiTouch;
+            }
         }
         
         /// <summary>
@@ -580,6 +802,12 @@ namespace BlokusGame.Core.Managers
             {
                 Vector2 lastCenter = _m_activeTouches[-1].position;
                 Vector2 panDelta = currentCenter - lastCenter;
+                
+                // 如果平移距离足够大，设置为平移状态
+                if (panDelta.magnitude > _m_dragThreshold * 0.5f)
+                {
+                    _m_currentTouchState = TouchState.Pan;
+                }
                 
                 // 触发棋盘平移
                 _triggerBoardPan(panDelta);
@@ -610,10 +838,17 @@ namespace BlokusGame.Core.Managers
                 if (boardVisualizer != null)
                 {
                     // 将屏幕坐标转换为世界坐标偏移
-                    Vector3 worldPanDelta = new Vector3(-_panDelta.x * 0.01f, 0, -_panDelta.y * 0.01f);
+                    float panSensitivity = 0.02f; // 平移敏感度
+                    Vector3 worldPanDelta = new Vector3(-_panDelta.x * panSensitivity, 0, -_panDelta.y * panSensitivity);
                     
-                    // 应用平移（这里需要BoardVisualizer支持获取和设置平移偏移）
-                    Debug.Log($"[TouchInputManager] 棋盘平移: {worldPanDelta}");
+                    // 获取当前平移偏移并应用增量
+                    Vector3 currentPanOffset = _getCurrentPanOffset(boardVisualizer);
+                    Vector3 newPanOffset = currentPanOffset + worldPanDelta;
+                    
+                    // 应用新的平移偏移
+                    boardVisualizer.setPanOffset(newPanOffset);
+                    
+                    Debug.Log($"[TouchInputManager] 棋盘平移: {worldPanDelta}, 新偏移: {newPanOffset}");
                 }
             }
         }
@@ -636,6 +871,8 @@ namespace BlokusGame.Core.Managers
                 
                 if (Mathf.Abs(deltaAngle) > _m_rotationThreshold)
                 {
+                    _m_currentTouchState = TouchState.Rotation;
+                    
                     // 触发棋盘旋转
                     _triggerBoardRotation(deltaAngle * _m_rotationSensitivity);
                     
@@ -683,15 +920,15 @@ namespace BlokusGame.Core.Managers
             {
                 _handlePieceTouch(touchedPiece, _touch);
                 // 显示成功触摸反馈
-                _showVisualFeedback(_touch.position, TouchFeedbackType.Success);
+                _showVisualFeedback(_touch.position, TouchFeedbackSystem.FeedbackType.Success);
             }
             else
             {
                 // 显示普通触摸反馈
-                _showVisualFeedback(_touch.position, TouchFeedbackType.Tap);
+                _showVisualFeedback(_touch.position, TouchFeedbackSystem.FeedbackType.Light);
             }
             
-            _m_currentTouchState = TouchState.SingleTouch;
+            _m_currentTouchState = TouchState.Tap;
             
             // 播放触觉反馈和视觉反馈
             if (_m_feedbackSystem != null)
@@ -715,7 +952,7 @@ namespace BlokusGame.Core.Managers
         /// <param name="_touch">触摸数据</param>
         private void _onTouchMoved(Touch _touch)
         {
-            if (_m_currentTouchState == TouchState.SingleTouch)
+            if (_m_currentTouchState == TouchState.Tap)
             {
                 float dragDistance = Vector2.Distance(_touch.position, _m_touchStartPosition);
                 
@@ -733,6 +970,7 @@ namespace BlokusGame.Core.Managers
             // 检查长按
             if (_m_isLongPressing && Time.time - _m_longPressStartTime >= _m_longPressTime)
             {
+                _m_currentTouchState = TouchState.LongPress;
                 _onLongPress();
                 _m_isLongPressing = false;
             }
@@ -750,11 +988,12 @@ namespace BlokusGame.Core.Managers
             {
                 _endDragging(_touch);
             }
-            else if (_m_currentTouchState == TouchState.SingleTouch)
+            else if (_m_currentTouchState == TouchState.Tap)
             {
                 // 检查是否是边缘滑动
                 if (_isEdgeSwipe(_touch))
                 {
+                    _m_currentTouchState = TouchState.EdgeSwipe;
                     _handleEdgeSwipe(_touch);
                 }
                 else
@@ -875,6 +1114,7 @@ namespace BlokusGame.Core.Managers
             float timeSinceLastTap = Time.time - _m_lastTapTime;
             if (_m_lastTappedPiece == _piece && timeSinceLastTap <= _m_doubleTapInterval)
             {
+                _m_currentTouchState = TouchState.DoubleTap;
                 _onDoubleTap(_piece);
             }
             
@@ -1053,23 +1293,48 @@ namespace BlokusGame.Core.Managers
             Touch touch1 = UnityEngine.Input.GetTouch(0);
             Touch touch2 = UnityEngine.Input.GetTouch(1);
             
+            // 计算两个触摸点之间的距离
             float currentDistance = Vector2.Distance(touch1.position, touch2.position);
             
-            if (_m_lastPinchDistance > 0)
+            // 初始化上一帧距离
+            if (_m_lastPinchDistance <= 0)
             {
-                float deltaDistance = currentDistance - _m_lastPinchDistance;
+                _m_lastPinchDistance = currentDistance;
+                return;
+            }
+            
+            // 计算距离变化
+            float deltaDistance = currentDistance - _m_lastPinchDistance;
+            
+            // 检查是否达到缩放阈值
+            if (Mathf.Abs(deltaDistance) > _m_pinchThreshold)
+            {
+                _m_currentTouchState = TouchState.Pinching;
                 
-                if (Mathf.Abs(deltaDistance) > _m_pinchThreshold)
+                // 计算缩放因子（基于距离变化的百分比）
+                float scaleFactor = currentDistance / _m_lastPinchDistance;
+                
+                // 应用缩放敏感度调整
+                float adjustedScaleFactor = 1f + (scaleFactor - 1f) * _m_pinchSensitivity;
+                
+                // 计算缩放中心点（两个触摸点的中心）
+                Vector2 pinchCenter = (touch1.position + touch2.position) * 0.5f;
+                
+                // 触发棋盘缩放
+                _triggerBoardZoomAtPoint(adjustedScaleFactor, pinchCenter);
+                
+                Debug.Log($"[TouchInputManager] 缩放手势 - 距离变化: {deltaDistance:F1}, 缩放因子: {adjustedScaleFactor:F3}");
+                
+                // 触发触觉反馈
+                if (_m_feedbackSystem != null && _m_enableHapticFeedback)
                 {
-                    _m_currentTouchState = TouchState.Pinching;
-                    
-                    // 计算缩放因子
-                    float scaleFactor = deltaDistance * _m_pinchSensitivity * 0.01f;
-                    
-                    // 触发棋盘缩放事件
-                    _triggerBoardZoom(scaleFactor);
-                    
-                    Debug.Log($"[TouchInputManager] 缩放手势，缩放因子: {scaleFactor}");
+                    _m_feedbackSystem.playHapticFeedback(TouchFeedbackSystem.FeedbackType.Light);
+                }
+                
+                // 显示缩放反馈效果
+                if (_m_feedbackSystem != null && _m_enableVisualFeedback)
+                {
+                    _m_feedbackSystem.showScaleEffect(pinchCenter, adjustedScaleFactor);
                 }
             }
             
@@ -1090,13 +1355,89 @@ namespace BlokusGame.Core.Managers
                 if (boardVisualizer != null)
                 {
                     // 获取当前缩放级别并应用变化
-                    float currentZoom = 1.0f; // 这里需要从BoardVisualizer获取当前缩放
-                    float newZoom = Mathf.Clamp(currentZoom + _scaleFactor, 0.5f, 3.0f);
+                    float currentZoom = _getCurrentZoomLevel(boardVisualizer);
+                    float newZoom = Mathf.Clamp(currentZoom * _scaleFactor, _m_minZoomLevel, _m_maxZoomLevel);
                     boardVisualizer.setZoomLevel(newZoom);
                     
-                    Debug.Log($"[TouchInputManager] 棋盘缩放: {_scaleFactor}, 新缩放级别: {newZoom}");
+                    Debug.Log($"[TouchInputManager] 棋盘缩放: {_scaleFactor:F3}, 新缩放级别: {newZoom:F3}");
                 }
             }
+        }
+        
+        /// <summary>
+        /// 在指定点触发棋盘缩放
+        /// </summary>
+        /// <param name="_scaleFactor">缩放因子</param>
+        /// <param name="_centerPoint">缩放中心点（屏幕坐标）</param>
+        private void _triggerBoardZoomAtPoint(float _scaleFactor, Vector2 _centerPoint)
+        {
+            // 获取棋盘控制器并应用缩放
+            var boardController = FindObjectOfType<BoardController>();
+            if (boardController != null)
+            {
+                var boardVisualizer = boardController.getBoardVisualizer();
+                if (boardVisualizer != null)
+                {
+                    // 获取当前缩放级别
+                    float currentZoom = _getCurrentZoomLevel(boardVisualizer);
+                    float newZoom = Mathf.Clamp(currentZoom * _scaleFactor, _m_minZoomLevel, _m_maxZoomLevel);
+                    
+                    // 计算缩放前后的世界坐标差异，用于调整平移偏移
+                    Vector3 worldPoint = _screenToWorldPoint(_centerPoint);
+                    Vector3 panAdjustment = worldPoint * (1f - newZoom / currentZoom);
+                    
+                    // 应用缩放
+                    boardVisualizer.setZoomLevel(newZoom);
+                    
+                    // 调整平移偏移以保持缩放中心点不变
+                    Vector3 currentPanOffset = _getCurrentPanOffset(boardVisualizer);
+                    boardVisualizer.setPanOffset(currentPanOffset + panAdjustment);
+                    
+                    Debug.Log($"[TouchInputManager] 在点 {_centerPoint} 缩放: {_scaleFactor:F3}, 新缩放级别: {newZoom:F3}");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 获取当前缩放级别
+        /// </summary>
+        /// <param name="_boardVisualizer">棋盘可视化组件</param>
+        /// <returns>当前缩放级别</returns>
+        private float _getCurrentZoomLevel(BoardVisualizer _boardVisualizer)
+        {
+            if (_boardVisualizer == null) return 1.0f;
+            return _boardVisualizer.getCurrentZoomLevel();
+        }
+        
+        /// <summary>
+        /// 获取当前平移偏移
+        /// </summary>
+        /// <param name="_boardVisualizer">棋盘可视化组件</param>
+        /// <returns>当前平移偏移</returns>
+        private Vector3 _getCurrentPanOffset(BoardVisualizer _boardVisualizer)
+        {
+            if (_boardVisualizer == null) return Vector3.zero;
+            return _boardVisualizer.getCurrentPanOffset();
+        }
+        
+        /// <summary>
+        /// 屏幕坐标转换为世界坐标
+        /// </summary>
+        /// <param name="_screenPoint">屏幕坐标</param>
+        /// <returns>世界坐标</returns>
+        private Vector3 _screenToWorldPoint(Vector2 _screenPoint)
+        {
+            if (_m_camera == null) return Vector3.zero;
+            
+            // 将屏幕坐标转换为世界坐标（假设在Y=0平面上）
+            Ray ray = _m_camera.ScreenPointToRay(_screenPoint);
+            if (ray.direction.y != 0)
+            {
+                float distance = -ray.origin.y / ray.direction.y;
+                return ray.origin + ray.direction * distance;
+            }
+            
+            return Vector3.zero;
         }
         
         #endregion
@@ -1158,23 +1499,31 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         /// <param name="_position">屏幕位置</param>
         /// <param name="_feedbackType">反馈类型</param>
-        private void _showVisualFeedback(Vector2 _position, TouchFeedbackType _feedbackType)
+        private void _showVisualFeedback(Vector2 _position, TouchFeedbackSystem.FeedbackType _feedbackType)
         {
             if (!_m_enableVisualFeedback || _m_feedbackSystem == null) return;
             
             // 根据反馈类型选择不同的视觉效果
             switch (_feedbackType)
             {
-                case TouchFeedbackType.Tap:
+                case TouchFeedbackSystem.FeedbackType.Light:
                     _m_feedbackSystem.showRippleEffect(_position, 0.5f);
                     break;
                     
-                case TouchFeedbackType.Success:
+                case TouchFeedbackSystem.FeedbackType.Medium:
+                    _m_feedbackSystem.showRippleEffect(_position, 0.7f);
+                    break;
+                    
+                case TouchFeedbackSystem.FeedbackType.Strong:
+                    _m_feedbackSystem.showRippleEffect(_position, 1.0f);
+                    break;
+                    
+                case TouchFeedbackSystem.FeedbackType.Success:
                     _m_feedbackSystem.showRippleEffect(_position, 1.0f);
                     // 可以添加成功的颜色效果
                     break;
                     
-                case TouchFeedbackType.Error:
+                case TouchFeedbackSystem.FeedbackType.Error:
                     _m_feedbackSystem.showRippleEffect(_position, 1.0f);
                     // 可以添加错误的颜色效果（红色）
                     break;
@@ -1186,7 +1535,7 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         /// <param name="_position">触摸位置</param>
         /// <param name="_feedbackType">反馈类型</param>
-        private void _createTouchEffect(Vector2 _position, TouchFeedbackType _feedbackType)
+        private void _createTouchEffect(Vector2 _position, TouchFeedbackSystem.FeedbackType _feedbackType)
         {
             // 将屏幕坐标转换为世界坐标
             Vector3 worldPosition = _screenToWorldPosition(_position);
@@ -1206,13 +1555,19 @@ namespace BlokusGame.Core.Managers
             Material effectMaterial = new Material(Shader.Find("Sprites/Default"));
             switch (_feedbackType)
             {
-                case TouchFeedbackType.Tap:
+                case TouchFeedbackSystem.FeedbackType.Light:
                     effectMaterial.color = Color.white;
                     break;
-                case TouchFeedbackType.Success:
+                case TouchFeedbackSystem.FeedbackType.Medium:
+                    effectMaterial.color = Color.cyan;
+                    break;
+                case TouchFeedbackSystem.FeedbackType.Strong:
+                    effectMaterial.color = Color.yellow;
+                    break;
+                case TouchFeedbackSystem.FeedbackType.Success:
                     effectMaterial.color = Color.green;
                     break;
-                case TouchFeedbackType.Error:
+                case TouchFeedbackSystem.FeedbackType.Error:
                     effectMaterial.color = Color.red;
                     break;
             }
@@ -1331,25 +1686,51 @@ namespace BlokusGame.Core.Managers
         /// <returns>是否为有效触摸</returns>
         private bool _isValidTouch(Touch _touch)
         {
-            // 检查触摸位置是否在有效区域内
+            // 如果在防误触模式中，更严格的验证
+            if (_m_isInAntiMistouchMode)
+            {
+                return _isValidTouchInAntiMistouchMode(_touch);
+            }
+            
+            // 基础位置验证
             if (!_isTouchPositionValid(_touch.position))
             {
                 return false;
             }
             
-            // 检查触摸压力（如果设备支持）
+            // 触摸压力验证（如果设备支持）
             if (_touch.pressure > 0 && _touch.pressure < _m_pressureThreshold)
             {
+                Debug.Log($"[TouchInputManager] 触摸压力过低: {_touch.pressure}");
                 return false;
             }
             
-            // 检查同时触摸数量
+            // 同时触摸数量验证
             if (UnityEngine.Input.touchCount > _m_maxSimultaneousTouches)
+            {
+                Debug.LogWarning($"[TouchInputManager] 触摸数量过多: {UnityEngine.Input.touchCount}");
+                return false;
+            }
+            
+            // 触摸频率验证
+            if (!_isValidTouchFrequency())
             {
                 return false;
             }
             
-            // 检查触摸间隔
+            // 手势冲突检测
+            if (_hasGestureConflict(_touch))
+            {
+                return false;
+            }
+            
+            // 手掌误触检测
+            if (_isPalmTouch(_touch))
+            {
+                return false;
+            }
+            
+            // 触摸间隔验证
             float currentTime = Time.time;
             if (currentTime - _m_lastValidTouchTime < _m_minTouchInterval)
             {
@@ -1357,6 +1738,38 @@ namespace BlokusGame.Core.Managers
             }
             
             _m_lastValidTouchTime = currentTime;
+            _recordTouchTimestamp(currentTime);
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// 防误触模式下的触摸验证
+        /// </summary>
+        /// <param name="_touch">触摸数据</param>
+        /// <returns>是否为有效触摸</returns>
+        private bool _isValidTouchInAntiMistouchMode(Touch _touch)
+        {
+            // 在防误触模式下，只允许单点触摸
+            if (UnityEngine.Input.touchCount > 1)
+            {
+                return false;
+            }
+            
+            // 更严格的位置验证
+            if (!_isTouchPositionValidStrict(_touch.position))
+            {
+                return false;
+            }
+            
+            // 检查是否可以退出防误触模式
+            float timeSinceAntiMistouch = Time.time - _m_antiMistouchStartTime;
+            if (timeSinceAntiMistouch > _m_antiMistouchRecoveryTime)
+            {
+                _m_isInAntiMistouchMode = false;
+                Debug.Log("[TouchInputManager] 防误触模式恢复正常");
+            }
+            
             return true;
         }
         
@@ -1380,27 +1793,312 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
+        /// 严格的触摸位置验证（防误触模式）
+        /// </summary>
+        /// <param name="_position">触摸位置</param>
+        /// <returns>是否有效</returns>
+        private bool _isTouchPositionValidStrict(Vector2 _position)
+        {
+            // 更大的边界区域
+            float strictBorder = _m_invalidTouchBorder * 2f;
+            
+            if (_position.x < strictBorder || 
+                _position.x > Screen.width - strictBorder ||
+                _position.y < strictBorder || 
+                _position.y > Screen.height - strictBorder)
+            {
+                return false;
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// 验证触摸频率是否正常
+        /// </summary>
+        /// <returns>是否为正常频率</returns>
+        private bool _isValidTouchFrequency()
+        {
+            float currentTime = Time.time;
+            
+            // 清理过期的时间戳
+            while (_m_touchTimestamps.Count > 0 && currentTime - _m_touchTimestamps.Peek() > 1f)
+            {
+                _m_touchTimestamps.Dequeue();
+            }
+            
+            // 检查每秒触摸次数是否异常
+            if (_m_touchTimestamps.Count >= _m_abnormalTouchThreshold)
+            {
+                Debug.LogWarning($"[TouchInputManager] 检测到异常触摸频率: {_m_touchTimestamps.Count}/秒");
+                return false;
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// 记录触摸时间戳
+        /// </summary>
+        /// <param name="_timestamp">时间戳</param>
+        private void _recordTouchTimestamp(float _timestamp)
+        {
+            _m_touchTimestamps.Enqueue(_timestamp);
+            
+            // 限制队列大小
+            while (_m_touchTimestamps.Count > _m_abnormalTouchThreshold * 2)
+            {
+                _m_touchTimestamps.Dequeue();
+            }
+        }
+        
+        /// <summary>
+        /// 检测手势冲突
+        /// </summary>
+        /// <param name="_touch">触摸数据</param>
+        /// <returns>是否有手势冲突</returns>
+        private bool _hasGestureConflict(Touch _touch)
+        {
+            float currentTime = Time.time;
+            
+            // 检测新手势
+            TouchState newGestureType = _detectGestureType(_touch);
+            
+            // 如果当前没有手势，直接设置新手势
+            if (_m_currentGestureType == TouchState.None)
+            {
+                _m_currentGestureType = newGestureType;
+                _m_gestureStartTime = currentTime;
+                return false;
+            }
+            
+            // 检查手势切换是否过于频繁
+            if (newGestureType != _m_currentGestureType && 
+                currentTime - _m_gestureStartTime < _m_gestureConflictWindow)
+            {
+                Debug.LogWarning($"[TouchInputManager] 手势冲突: {_m_currentGestureType} -> {newGestureType}");
+                return true;
+            }
+            
+            // 更新当前手势
+            if (newGestureType != _m_currentGestureType)
+            {
+                _m_currentGestureType = newGestureType;
+                _m_gestureStartTime = currentTime;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// 检测手势类型
+        /// </summary>
+        /// <param name="_touch">触摸数据</param>
+        /// <returns>手势类型</returns>
+        private TouchState _detectGestureType(Touch _touch)
+        {
+            int touchCount = UnityEngine.Input.touchCount;
+            
+            if (touchCount == 1)
+            {
+                if (_touch.phase == TouchPhase.Moved)
+                {
+                    float distance = Vector2.Distance(_touch.position, _touch.position - _touch.deltaPosition);
+                    return distance > _m_dragThreshold ? TouchState.Dragging : TouchState.Tap;
+                }
+                return TouchState.Tap;
+            }
+            else if (touchCount == 2)
+            {
+                // 根据双指操作判断手势类型
+                Touch touch1 = UnityEngine.Input.GetTouch(0);
+                Touch touch2 = UnityEngine.Input.GetTouch(1);
+                
+                float currentDistance = Vector2.Distance(touch1.position, touch2.position);
+                float lastDistance = Vector2.Distance(touch1.position - touch1.deltaPosition, 
+                                                     touch2.position - touch2.deltaPosition);
+                
+                if (Mathf.Abs(currentDistance - lastDistance) > _m_pinchThreshold)
+                {
+                    return TouchState.Pinching;
+                }
+                
+                Vector2 direction1 = touch1.deltaPosition.normalized;
+                Vector2 direction2 = touch2.deltaPosition.normalized;
+                float dotProduct = Vector2.Dot(direction1, direction2);
+                
+                if (dotProduct > 0.8f) // 同方向移动
+                {
+                    return TouchState.Pan;
+                }
+                else if (dotProduct < -0.8f) // 反方向移动
+                {
+                    return TouchState.Rotation;
+                }
+            }
+            
+            return TouchState.None;
+        }
+        
+        /// <summary>
+        /// 检测是否为手掌误触
+        /// </summary>
+        /// <param name="_touch">触摸数据</param>
+        /// <returns>是否为手掌误触</returns>
+        private bool _isPalmTouch(Touch _touch)
+        {
+            // 如果设备支持触摸面积检测
+            if (_touch.radius > 0)
+            {
+                float touchArea = Mathf.PI * _touch.radius * _touch.radius;
+                if (touchArea > _m_palmTouchAreaThreshold)
+                {
+                    Debug.Log($"[TouchInputManager] 检测到手掌误触，面积: {touchArea}");
+                    return true;
+                }
+            }
+            
+            // 基于多点触摸的手掌检测
+            if (UnityEngine.Input.touchCount >= 3)
+            {
+                _m_palmTouchPositions.Clear();
+                for (int i = 0; i < UnityEngine.Input.touchCount; i++)
+                {
+                    _m_palmTouchPositions.Add(UnityEngine.Input.GetTouch(i).position);
+                }
+                
+                // 计算触摸点的分布面积
+                float area = _calculateTouchArea(_m_palmTouchPositions);
+                if (area > _m_palmTouchAreaThreshold)
+                {
+                    Debug.Log($"[TouchInputManager] 检测到多点手掌误触，面积: {area}");
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// 计算触摸点分布面积
+        /// </summary>
+        /// <param name="_positions">触摸点位置列表</param>
+        /// <returns>分布面积</returns>
+        private float _calculateTouchArea(List<Vector2> _positions)
+        {
+            if (_positions.Count < 3) return 0f;
+            
+            // 简单的包围盒面积计算
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minY = float.MaxValue, maxY = float.MinValue;
+            
+            foreach (Vector2 pos in _positions)
+            {
+                minX = Mathf.Min(minX, pos.x);
+                maxX = Mathf.Max(maxX, pos.x);
+                minY = Mathf.Min(minY, pos.y);
+                maxY = Mathf.Max(maxY, pos.y);
+            }
+            
+            return (maxX - minX) * (maxY - minY);
+        }
+        
+        /// <summary>
         /// 处理防误触逻辑
         /// </summary>
         private void _processAntiMistouch()
         {
+            float currentTime = Time.time;
+            
             // 检测异常触摸模式
+            bool shouldEnterAntiMistouchMode = false;
+            
+            // 1. 检测同时触摸数量异常
             if (UnityEngine.Input.touchCount > _m_maxSimultaneousTouches)
             {
-                if (!_m_isInAntiMistouchMode)
+                shouldEnterAntiMistouchMode = true;
+                Debug.LogWarning($"[TouchInputManager] 触摸数量异常: {UnityEngine.Input.touchCount}");
+            }
+            
+            // 2. 检测触摸频率异常
+            if (_m_touchTimestamps.Count >= _m_abnormalTouchThreshold)
+            {
+                shouldEnterAntiMistouchMode = true;
+                Debug.LogWarning($"[TouchInputManager] 触摸频率异常: {_m_touchTimestamps.Count}/秒");
+            }
+            
+            // 3. 检测手掌误触
+            if (UnityEngine.Input.touchCount >= 3)
+            {
+                bool hasPalmTouch = false;
+                for (int i = 0; i < UnityEngine.Input.touchCount; i++)
                 {
-                    _m_isInAntiMistouchMode = true;
-                    Debug.LogWarning("[TouchInputManager] 检测到异常触摸模式，启用防误触模式");
-                    
-                    // 重置所有触摸状态
-                    resetInput();
+                    if (_isPalmTouch(UnityEngine.Input.GetTouch(i)))
+                    {
+                        hasPalmTouch = true;
+                        break;
+                    }
+                }
+                
+                if (hasPalmTouch)
+                {
+                    shouldEnterAntiMistouchMode = true;
+                    Debug.LogWarning("[TouchInputManager] 检测到手掌误触");
                 }
             }
-            else if (_m_isInAntiMistouchMode && UnityEngine.Input.touchCount == 0)
+            
+            // 进入防误触模式
+            if (shouldEnterAntiMistouchMode && !_m_isInAntiMistouchMode)
             {
-                // 退出防误触模式
-                _m_isInAntiMistouchMode = false;
-                Debug.Log("[TouchInputManager] 退出防误触模式");
+                _m_isInAntiMistouchMode = true;
+                _m_antiMistouchStartTime = currentTime;
+                Debug.LogWarning("[TouchInputManager] 启用防误触模式");
+                
+                // 重置所有触摸状态
+                resetInput();
+                
+                // 清理触摸频率统计
+                _m_touchTimestamps.Clear();
+                
+                // 重置手势状态
+                _m_currentGestureType = TouchState.None;
+                
+                // 触发防误触反馈
+                if (_m_feedbackSystem != null && _m_enableHapticFeedback)
+                {
+                    _m_feedbackSystem.playHapticFeedback(TouchFeedbackSystem.FeedbackType.Error);
+                }
+            }
+            
+            // 检查是否可以退出防误触模式
+            if (_m_isInAntiMistouchMode)
+            {
+                bool canExitAntiMistouchMode = false;
+                
+                // 1. 没有触摸输入
+                if (UnityEngine.Input.touchCount == 0)
+                {
+                    canExitAntiMistouchMode = true;
+                }
+                
+                // 2. 超过恢复时间且只有单点触摸
+                if (currentTime - _m_antiMistouchStartTime > _m_antiMistouchRecoveryTime && 
+                    UnityEngine.Input.touchCount <= 1)
+                {
+                    canExitAntiMistouchMode = true;
+                }
+                
+                if (canExitAntiMistouchMode)
+                {
+                    _m_isInAntiMistouchMode = false;
+                    Debug.Log("[TouchInputManager] 退出防误触模式");
+                    
+                    // 触发恢复反馈
+                    if (_m_feedbackSystem != null && _m_enableHapticFeedback)
+                    {
+                        _m_feedbackSystem.playHapticFeedback(TouchFeedbackSystem.FeedbackType.Success);
+                    }
+                }
             }
         }
         
@@ -1479,23 +2177,261 @@ namespace BlokusGame.Core.Managers
         }
         
         /// <summary>
-        /// 优化触摸处理性能
+        /// 性能监控
         /// </summary>
-        private void _optimizeTouchPerformance()
+        private void _monitorPerformance()
         {
-            // 根据设备性能调整处理频率
-            if (Application.targetFrameRate > 0 && Application.targetFrameRate < 30)
+            _m_performanceMonitorTimer += Time.deltaTime;
+            
+            if (_m_performanceMonitorTimer >= _m_performanceMonitorInterval)
             {
-                // 低性能设备，降低处理频率
-                _m_maxTouchEventsPerSecond = Mathf.Min(_m_maxTouchEventsPerSecond, 30);
+                _m_performanceMonitorTimer = 0f;
+                
+                // 计算当前帧率
+                float currentFrameRate = 1f / Time.deltaTime;
+                _m_frameRateHistory.Enqueue(currentFrameRate);
+                
+                // 保持历史记录在合理范围内
+                while (_m_frameRateHistory.Count > 10)
+                {
+                    _m_frameRateHistory.Dequeue();
+                }
+                
+                // 计算平均帧率
+                float totalFrameRate = 0f;
+                foreach (float frameRate in _m_frameRateHistory)
+                {
+                    totalFrameRate += frameRate;
+                }
+                _m_currentAverageFrameRate = totalFrameRate / _m_frameRateHistory.Count;
+                
+                // 更新性能级别
+                _updatePerformanceLevel();
+                
+                // 应用性能优化
+                _applyPerformanceOptimizations();
+            }
+        }
+        
+        /// <summary>
+        /// 更新性能级别
+        /// </summary>
+        private void _updatePerformanceLevel()
+        {
+            PerformanceLevel newLevel;
+            
+            if (_m_currentAverageFrameRate < _m_lowPerformanceThreshold)
+            {
+                newLevel = PerformanceLevel.Low;
+            }
+            else if (_m_currentAverageFrameRate < _m_lowPerformanceThreshold * 1.5f)
+            {
+                newLevel = PerformanceLevel.Medium;
+            }
+            else
+            {
+                newLevel = PerformanceLevel.High;
+            }
+            
+            if (newLevel != _m_currentPerformanceLevel)
+            {
+                _m_currentPerformanceLevel = newLevel;
+                Debug.Log($"[TouchInputManager] 性能级别变更为: {newLevel}");
+            }
+        }
+        
+        /// <summary>
+        /// 应用性能优化
+        /// </summary>
+        private void _applyPerformanceOptimizations()
+        {
+            switch (_m_currentPerformanceLevel)
+            {
+                case PerformanceLevel.Low:
+                    _m_maxTouchEventsPerSecond = 30;
+                    _m_enableVisualFeedback = false;
+                    _m_touchEventBatchSize = 10; // 增加批处理大小
+                    break;
+                    
+                case PerformanceLevel.Medium:
+                    _m_maxTouchEventsPerSecond = 45;
+                    _m_enableVisualFeedback = true;
+                    _m_touchEventBatchSize = 5;
+                    break;
+                    
+                case PerformanceLevel.High:
+                    _m_maxTouchEventsPerSecond = 60;
+                    _m_enableVisualFeedback = true;
+                    _m_touchEventBatchSize = 3;
+                    break;
             }
             
             // 根据触摸数量动态调整
             if (UnityEngine.Input.touchCount > 2)
             {
-                // 多点触摸时降低处理频率
-                _m_maxTouchEventsPerSecond = Mathf.Min(_m_maxTouchEventsPerSecond, 40);
+                _m_maxTouchEventsPerSecond = Mathf.RoundToInt(_m_maxTouchEventsPerSecond * 0.8f);
             }
+        }
+        
+        /// <summary>
+        /// 低性能模式下的输入处理
+        /// </summary>
+        private void _handleInputLowPerformance()
+        {
+            // 降低处理频率，每隔一帧处理一次
+            if (Time.frameCount % 2 != 0) return;
+            
+            // 只处理最重要的触摸事件
+            if (_m_enableTouchInput && UnityEngine.Input.touchCount > 0)
+            {
+                // 只处理第一个触摸点
+                _handleSingleTouch(UnityEngine.Input.GetTouch(0));
+            }
+            else if (_m_enableMouseInput && _shouldHandleMouseInput())
+            {
+                _handleMouseInput();
+            }
+        }
+        
+        /// <summary>
+        /// 处理批处理的触摸事件
+        /// </summary>
+        private void _processBatchedTouchEvents()
+        {
+            if (_m_touchEventBatchQueue.Count == 0) return;
+            
+            int processedBatches = 0;
+            int maxBatchesPerFrame = _m_currentPerformanceLevel == PerformanceLevel.Low ? 1 : 3;
+            
+            while (_m_touchEventBatchQueue.Count > 0 && processedBatches < maxBatchesPerFrame)
+            {
+                TouchEventBatch batch = _m_touchEventBatchQueue.Dequeue();
+                
+                // 处理批处理中的事件
+                foreach (TouchEventData eventData in batch.events)
+                {
+                    _processSingleTouchEvent(eventData);
+                }
+                
+                // 回收事件列表到对象池
+                _returnToObjectPool(batch.events);
+                
+                processedBatches++;
+            }
+        }
+        
+        /// <summary>
+        /// 处理单个触摸事件
+        /// </summary>
+        /// <param name="_eventData">触摸事件数据</param>
+        private void _processSingleTouchEvent(TouchEventData _eventData)
+        {
+            // 根据事件类型处理
+            switch (_eventData.eventType)
+            {
+                case TouchEventType.Began:
+                    // 处理触摸开始
+                    break;
+                case TouchEventType.Moved:
+                    // 处理触摸移动
+                    break;
+                case TouchEventType.Ended:
+                    // 处理触摸结束
+                    break;
+                case TouchEventType.Canceled:
+                    // 处理触摸取消
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// 初始化对象池
+        /// </summary>
+        private void _initializeObjectPools()
+        {
+            // 初始化触摸事件数据对象池
+            var touchEventDataPool = new Queue<object>();
+            for (int i = 0; i < _m_objectPoolPreallocationSize; i++)
+            {
+                touchEventDataPool.Enqueue(new TouchEventData());
+            }
+            _m_objectPools[typeof(TouchEventData)] = touchEventDataPool;
+            
+            // 初始化触摸事件列表对象池
+            var touchEventListPool = new Queue<object>();
+            for (int i = 0; i < _m_objectPoolPreallocationSize / 2; i++)
+            {
+                touchEventListPool.Enqueue(new List<TouchEventData>());
+            }
+            _m_objectPools[typeof(List<TouchEventData>)] = touchEventListPool;
+            
+            Debug.Log($"[TouchInputManager] 对象池初始化完成，预分配大小: {_m_objectPoolPreallocationSize}");
+        }
+        
+        /// <summary>
+        /// 从对象池获取对象
+        /// </summary>
+        /// <typeparam name="T">对象类型</typeparam>
+        /// <returns>对象实例</returns>
+        private T _getFromObjectPool<T>() where T : class, new()
+        {
+            System.Type type = typeof(T);
+            
+            if (_m_objectPools.ContainsKey(type) && _m_objectPools[type].Count > 0)
+            {
+                return _m_objectPools[type].Dequeue() as T;
+            }
+            
+            // 池中没有对象，创建新的
+            return new T();
+        }
+        
+        /// <summary>
+        /// 将对象返回到对象池
+        /// </summary>
+        /// <typeparam name="T">对象类型</typeparam>
+        /// <param name="_obj">要返回的对象</param>
+        private void _returnToObjectPool<T>(T _obj) where T : class
+        {
+            if (_obj == null) return;
+            
+            System.Type type = typeof(T);
+            
+            if (!_m_objectPools.ContainsKey(type))
+            {
+                _m_objectPools[type] = new Queue<object>();
+            }
+            
+            // 清理对象状态
+            if (_obj is List<TouchEventData> list)
+            {
+                list.Clear();
+            }
+            
+            // 限制池大小
+            if (_m_objectPools[type].Count < _m_objectPoolPreallocationSize * 2)
+            {
+                _m_objectPools[type].Enqueue(_obj);
+            }
+        }
+        
+        /// <summary>
+        /// 创建触摸事件批处理
+        /// </summary>
+        /// <param name="_events">事件列表</param>
+        /// <param name="_priority">优先级</param>
+        private void _createTouchEventBatch(List<TouchEventData> _events, int _priority = 0)
+        {
+            if (_events == null || _events.Count == 0) return;
+            
+            TouchEventBatch batch = new TouchEventBatch
+            {
+                events = _events,
+                timestamp = Time.time,
+                priority = _priority
+            };
+            
+            _m_touchEventBatchQueue.Enqueue(batch);
         }
         
         /// <summary>
@@ -1504,9 +2440,51 @@ namespace BlokusGame.Core.Managers
         /// <returns>性能统计字符串</returns>
         public string getTouchPerformanceStats()
         {
+            int totalPooledObjects = 0;
+            foreach (var pool in _m_objectPools.Values)
+            {
+                totalPooledObjects += pool.Count;
+            }
+            
             return $"触摸事件/秒: {_m_currentFrameTouchEvents * 60}, " +
                    $"缓存事件: {(_m_touchEventCache?.Count ?? 0)}, " +
+                   $"批处理队列: {_m_touchEventBatchQueue.Count}, " +
+                   $"对象池: {totalPooledObjects}, " +
+                   $"平均帧率: {_m_currentAverageFrameRate:F1}, " +
+                   $"性能级别: {_m_currentPerformanceLevel}, " +
                    $"防误触模式: {_m_isInAntiMistouchMode}";
+        }
+        
+        /// <summary>
+        /// 获取详细的性能报告
+        /// </summary>
+        /// <returns>详细性能报告</returns>
+        public string getDetailedPerformanceReport()
+        {
+            System.Text.StringBuilder report = new System.Text.StringBuilder();
+            
+            report.AppendLine("=== TouchInputManager 性能报告 ===");
+            report.AppendLine($"当前帧率: {1f / Time.deltaTime:F1} FPS");
+            report.AppendLine($"平均帧率: {_m_currentAverageFrameRate:F1} FPS");
+            report.AppendLine($"性能级别: {_m_currentPerformanceLevel}");
+            report.AppendLine($"触摸事件处理频率: {_m_maxTouchEventsPerSecond}/秒");
+            report.AppendLine($"当前帧触摸事件: {_m_currentFrameTouchEvents}");
+            report.AppendLine($"触摸事件缓存: {(_m_touchEventCache?.Count ?? 0)}");
+            report.AppendLine($"批处理队列: {_m_touchEventBatchQueue.Count}");
+            report.AppendLine($"批处理大小: {_m_touchEventBatchSize}");
+            
+            report.AppendLine("\n=== 对象池状态 ===");
+            foreach (var kvp in _m_objectPools)
+            {
+                report.AppendLine($"{kvp.Key.Name}: {kvp.Value.Count} 个对象");
+            }
+            
+            report.AppendLine($"\n=== 防误触状态 ===");
+            report.AppendLine($"防误触模式: {_m_isInAntiMistouchMode}");
+            report.AppendLine($"当前手势: {_m_currentGestureType}");
+            report.AppendLine($"触摸频率统计: {_m_touchTimestamps.Count}/秒");
+            
+            return report.ToString();
         }
         
         #endregion

@@ -311,6 +311,24 @@ namespace BlokusGame.Core.Board
             _m_currentZoom = 1.0f;
             _m_currentPanOffset = Vector3.zero;
             _applyCameraTransform();
+        }
+        
+        /// <summary>
+        /// 获取当前缩放级别
+        /// </summary>
+        /// <returns>当前缩放级别</returns>
+        public float getCurrentZoomLevel()
+        {
+            return _m_currentZoom;
+        }
+        
+        /// <summary>
+        /// 获取当前平移偏移
+        /// </summary>
+        /// <returns>当前平移偏移</returns>
+        public Vector3 getCurrentPanOffset()
+        {
+            return _m_currentPanOffset;
         }       
  
         // ==================== 私有方法实现 ====================
