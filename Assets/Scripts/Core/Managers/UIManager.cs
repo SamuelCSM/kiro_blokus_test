@@ -252,8 +252,20 @@ namespace BlokusGame.Core.Managers
         /// <param name="_showProgress">是否显示进度条</param>
         public void ShowLoading(string _loadingText = "加载中...", bool _showProgress = false)
         {
-            // TODO: 实现加载UI显示逻辑
-            Debug.Log($"[UIManager] 显示加载界面: {_loadingText}");
+            var loadingUI = GetPanel<LoadingUI>();
+            if (loadingUI != null)
+            {
+                loadingUI.ShowLoading(_loadingText, _showProgress);
+                
+                if (_m_enableDetailedLogging)
+                {
+                    Debug.Log($"[UIManager] 显示加载界面: {_loadingText}, 显示进度: {_showProgress}");
+                }
+            }
+            else
+            {
+                Debug.LogError("[UIManager] 未找到LoadingUI组件");
+            }
         }
         
         /// <summary>
@@ -261,8 +273,20 @@ namespace BlokusGame.Core.Managers
         /// </summary>
         public void HideLoading()
         {
-            // TODO: 实现加载UI隐藏逻辑
-            Debug.Log("[UIManager] 隐藏加载界面");
+            var loadingUI = GetPanel<LoadingUI>();
+            if (loadingUI != null)
+            {
+                loadingUI.HideLoading();
+                
+                if (_m_enableDetailedLogging)
+                {
+                    Debug.Log("[UIManager] 隐藏加载界面");
+                }
+            }
+            else
+            {
+                Debug.LogError("[UIManager] 未找到LoadingUI组件");
+            }
         }
         
         /// <summary>
@@ -272,8 +296,65 @@ namespace BlokusGame.Core.Managers
         /// <param name="_progressText">进度文本</param>
         public void UpdateLoadingProgress(float _progress, string _progressText = "")
         {
-            // TODO: 实现加载进度更新逻辑
-            Debug.Log($"[UIManager] 更新加载进度: {_progress:P0} - {_progressText}");
+            var loadingUI = GetPanel<LoadingUI>();
+            if (loadingUI != null)
+            {
+                loadingUI.UpdateProgress(_progress, _progressText);
+                
+                if (_m_enableDetailedLogging)
+                {
+                    Debug.Log($"[UIManager] 更新加载进度: {_progress:P0} - {_progressText}");
+                }
+            }
+            else
+            {
+                Debug.LogError("[UIManager] 未找到LoadingUI组件");
+            }
+        }
+        
+        /// <summary>
+        /// 显示简单加载界面（无进度条）
+        /// </summary>
+        /// <param name="_loadingText">加载文本</param>
+        public void ShowSimpleLoading(string _loadingText = "加载中...")
+        {
+            ShowLoading(_loadingText, false);
+        }
+        
+        /// <summary>
+        /// 显示进度加载界面（带进度条）
+        /// </summary>
+        /// <param name="_loadingText">加载文本</param>
+        public void ShowProgressLoading(string _loadingText = "加载中...")
+        {
+            ShowLoading(_loadingText, true);
+        }
+        
+        /// <summary>
+        /// 设置加载步骤
+        /// </summary>
+        /// <param name="_steps">加载步骤列表</param>
+        /// <param name="_stepDuration">每个步骤的显示时长</param>
+        public void SetLoadingSteps(System.Collections.Generic.List<string> _steps, float _stepDuration = 2f)
+        {
+            var loadingUI = GetPanel<LoadingUI>();
+            if (loadingUI != null)
+            {
+                loadingUI.SetLoadingSteps(_steps, _stepDuration);
+            }
+        }
+        
+        /// <summary>
+        /// 完成加载（进度设为100%然后隐藏）
+        /// </summary>
+        /// <param name="_delay">完成后延迟隐藏时间</param>
+        public void CompleteLoading(float _delay = 0.5f)
+        {
+            var loadingUI = GetPanel<LoadingUI>();
+            if (loadingUI != null)
+            {
+                loadingUI.CompleteLoading(_delay);
+            }
         }
         
         #endregion
